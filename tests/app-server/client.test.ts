@@ -147,3 +147,14 @@ test("client emits normalized notifications", async () => {
     { method: "thread/status/changed", params: { threadId: "one", status: { type: "idle" } } },
   ]);
 });
+
+test("client forwards close events from the RPC transport", () => {
+  const rpc = new FakeRpc();
+  const client = new AppServerClient(rpc);
+  const closes: unknown[] = [];
+  client.on("close", (event) => closes.push(event));
+
+  rpc.emit("close", { code: 1, signal: null });
+
+  assert.deepEqual(closes, [{ code: 1, signal: null }]);
+});

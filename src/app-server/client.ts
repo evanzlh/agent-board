@@ -24,6 +24,9 @@ export class AppServerClient extends EventEmitter {
     this.#rpc.on("notification", (notification) => {
       this.emit("notification", notification as AppServerNotification);
     });
+    this.#rpc.on("close", (event) => {
+      this.emit("close", event);
+    });
   }
 
   async initialize(): Promise<unknown> {

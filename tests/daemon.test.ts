@@ -51,6 +51,20 @@ function thread(id: string, status: AppServerThread["status"]): AppServerThread 
   };
 }
 
+async function waitFor(assertion: () => Promise<void> | void): Promise<void> {
+  let lastError: unknown;
+  for (let index = 0; index < 20; index += 1) {
+    try {
+      await assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+
 test("startDaemon wires supervisor, client, store, and http api", async () => {
   const calls: string[] = [];
   const daemon = await startDaemon({
@@ -258,6 +272,111 @@ test("daemon stop attempts app server cleanup when http stop fails", async () =>
   await assert.rejects(() => daemon.stop(), /api stop failed/);
 
   assert.deepEqual(calls, ["api.stop", "appServer.stop"]);
+});
+
+test("daemon marks agents stale and retries when the app server client closes", async () => {
+  let now = 1000;
+  let starts = 0;
+  const clients: FakeClient[] = [];
+  const daemon = await startDaemon({
+    config: {
+      host: "127.0.0.1",
+      port: 0,
+      autoStartAppServer: true,
+      refreshIntervalMs: 10,
+      staleAfterMs: 50,
+    },
+    now: () => now,
+    supervisor: {
+      async start() {
+        starts += 1;
+        if (starts > 1) {
+          throw new Error("reconnect unavailable");
+        }
+        return {
+          mode: "managed-child",
+          cliVersion: "codex-cli 0.135.0",
+          process: { kill: () => true },
+          stop: () => {},
+        };
+      },
+    },
+    clientFactory: () => {
+      const client = new FakeClient();
+      client.threads = [thread("one", { type: "active", activeFlags: [] })];
+      clients.push(client);
+      return client;
+    },
+  });
+
+  try {
+    clients[0].emit("close", { code: 1, signal: null });
+    const disconnected = await (await fetch(`${daemon.url}/health`)).json();
+    assert.equal(disconnected.appServer.connected, false);
+
+    now = 1100;
+    await waitFor(async () => {
+      const health = await (await fetch(`${daemon.url}/health`)).json();
+      const agent = await (await fetch(`${daemon.url}/agents/one`)).json();
+      assert.ok(starts >= 2);
+      assert.equal(health.appServer.connected, false);
+      assert.match(health.appServer.lastError, /reconnect unavailable/);
+      assert.equal(agent.stale, true);
+    });
+  } finally {
+    await daemon.stop();
+  }
+});
+
+test("daemon reconnects and refreshes state after app server client close", async () => {
+  let starts = 0;
+  const clients: FakeClient[] = [];
+  const daemon = await startDaemon({
+    config: {
+      host: "127.0.0.1",
+      port: 0,
+      autoStartAppServer: true,
+      refreshIntervalMs: 10,
+      staleAfterMs: 1000,
+    },
+    supervisor: {
+      async start() {
+        starts += 1;
+        return {
+          mode: "managed-child",
+          cliVersion: "codex-cli 0.135.0",
+          process: { kill: () => true },
+          stop: () => {},
+        };
+      },
+    },
+    clientFactory: () => {
+      const client = new FakeClient();
+      client.threads =
+        starts === 1
+          ? [thread("one", { type: "idle" })]
+          : [thread("two", { type: "active", activeFlags: [] })];
+      clients.push(client);
+      return client;
+    },
+  });
+
+  try {
+    clients[0].emit("close", { code: 1, signal: null });
+
+    await waitFor(async () => {
+      const health = await (await fetch(`${daemon.url}/health`)).json();
+      const status = await (await fetch(`${daemon.url}/status`)).json();
+      assert.equal(starts, 2);
+      assert.equal(health.appServer.connected, true);
+      assert.deepEqual(
+        status.agents.map((agent: { id: string }) => agent.id),
+        ["two"],
+      );
+    });
+  } finally {
+    await daemon.stop();
+  }
 });
 
 test("CLI without a command exits non-zero and prints Unknown command", async () => {

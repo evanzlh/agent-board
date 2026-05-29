@@ -219,6 +219,19 @@ test("applies thread status changed notifications and emits agent.updated", () =
   });
 });
 
+test("applies thread started notifications by adding a new agent", () => {
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => 1000 });
+
+  store.applyNotification({
+    method: "thread/started",
+    params: { thread: thread("new", { type: "active", activeFlags: [] }) },
+  });
+
+  const agent = store.getAgent("new");
+  assert.equal(agent?.id, "new");
+  assert.equal(agent?.status, "working");
+});
+
 test("applies item lifecycle notifications by refreshing lastEventAt", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });

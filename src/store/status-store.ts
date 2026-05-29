@@ -114,6 +114,11 @@ export class StatusStore extends EventEmitter {
   }
 
   applyNotification(notification: StoreNotification): void {
+    if (notification.method === "thread/started") {
+      this.#applyThreadStarted(notification.params);
+      return;
+    }
+
     if (notification.method === "thread/status/changed") {
       this.#applyThreadStatusChanged(notification.params);
       return;
@@ -191,6 +196,13 @@ export class StatusStore extends EventEmitter {
         this.#setAgent({ ...agent, stale: true });
       }
     }
+  }
+
+  #applyThreadStarted(params: unknown): void {
+    if (!isObject(params) || !isObject(params.thread)) {
+      return;
+    }
+    this.upsertThread(params.thread as AppServerThread);
   }
 
   #applyThreadStatusChanged(params: unknown): void {

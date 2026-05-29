@@ -16,10 +16,13 @@ export type DaemonHandle = {
 export type ClientLike = {
   initialize: () => Promise<unknown>;
   readInitialState: () => Promise<InitialAppServerState>;
-  on: (
-    event: "notification",
-    listener: (notification: { method: string; params?: unknown }) => void,
-  ) => void;
+  on: {
+    (
+      event: "notification",
+      listener: (notification: { method: string; params?: unknown }) => void,
+    ): void;
+    (event: "close", listener: (event: unknown) => void): void;
+  };
 };
 
 export type StartDaemonOptions = {
@@ -42,30 +45,91 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   const appServer = await supervisor.start({
     autoStartAppServer: options.config.autoStartAppServer,
   });
+  let currentAppServer: AppServerProcess | null = appServer;
+  let currentClient: ClientLike | null = null;
   let staleTimer: NodeJS.Timeout | null = null;
   let api: HttpApi | null = null;
+  let stopped = false;
+  let reconnecting: Promise<void> | null = null;
+
+  const connect = async (throwOnFailure: boolean): Promise<void> => {
+    let nextAppServer: AppServerProcess | null = null;
+    try {
+      nextAppServer =
+        currentAppServer && currentClient === null
+          ? currentAppServer
+          : await supervisor.start({
+              autoStartAppServer: options.config.autoStartAppServer,
+            });
+
+      const nextClient =
+        options.clientFactory?.(nextAppServer) ??
+        new AppServerClient(new JsonRpcStdioClient(nextAppServer.process as never));
+
+      nextClient.on("notification", (notification) => {
+        store.applyNotification(notification);
+      });
+      nextClient.on("close", (event) => {
+        if (stopped || currentClient !== nextClient) {
+          return;
+        }
+        store.setAppServerConnection({
+          connected: false,
+          lastError: readClientCloseMessage(event),
+        });
+      });
+
+      await nextClient.initialize();
+      const initial = await nextClient.readInitialState();
+      if (stopped) {
+        nextAppServer.stop();
+        return;
+      }
+
+      const previousAppServer = currentAppServer;
+      currentAppServer = nextAppServer;
+      currentClient = nextClient;
+      store.replaceThreads(initial.threads);
+      store.setAppServerConnection({
+        connected: true,
+        autoStarted: options.config.autoStartAppServer,
+        mode: nextAppServer.mode,
+        cliVersion: nextAppServer.cliVersion,
+      });
+
+      if (previousAppServer && previousAppServer !== nextAppServer) {
+        previousAppServer.stop();
+      }
+    } catch (error) {
+      if (nextAppServer && nextAppServer !== currentAppServer) {
+        nextAppServer.stop();
+      }
+      store.setAppServerConnection({
+        connected: false,
+        lastError: readErrorMessage(error),
+      });
+      if (throwOnFailure) {
+        throw error;
+      }
+    }
+  };
+
+  const scheduleReconnect = (): void => {
+    if (stopped || reconnecting || store.getHealth().appServer.connected) {
+      return;
+    }
+    reconnecting = connect(false).finally(() => {
+      reconnecting = null;
+    });
+  };
 
   try {
-    store.setAppServerConnection({
-      connected: true,
-      autoStarted: options.config.autoStartAppServer,
-      mode: appServer.mode,
-      cliVersion: appServer.cliVersion,
-    });
+    await connect(true);
 
-    const client =
-      options.clientFactory?.(appServer) ??
-      new AppServerClient(new JsonRpcStdioClient(appServer.process as never));
-
-    client.on("notification", (notification) => {
-      store.applyNotification(notification);
-    });
-
-    await client.initialize();
-    const initial = await client.readInitialState();
-    store.replaceThreads(initial.threads);
-
-    staleTimer = setInterval(() => store.markStaleAgents(), options.config.refreshIntervalMs);
+    staleTimer = setInterval(() => {
+      store.markStaleAgents();
+      scheduleReconnect();
+    }, options.config.refreshIntervalMs);
     const httpApiFactory = options.httpApiFactory ?? createHttpApi;
     api = httpApiFactory({
       host: options.config.host,
@@ -74,15 +138,27 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     });
     await api.start();
 
-    return createDaemonHandle(api, staleTimer, appServer);
+    return createDaemonHandle(
+      api,
+      staleTimer,
+      () => {
+        stopped = true;
+      },
+      () => {
+        currentAppServer?.stop();
+        currentAppServer = null;
+        currentClient = null;
+      },
+    );
   } catch (error) {
+    stopped = true;
     if (staleTimer) {
       clearInterval(staleTimer);
     }
     if (api) {
       await api.stop().catch(() => {});
     }
-    appServer.stop();
+    currentAppServer?.stop();
     throw error;
   }
 }
@@ -90,14 +166,15 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
 function createDaemonHandle(
   api: HttpApi,
   staleTimer: NodeJS.Timeout,
-  appServer: AppServerProcess,
+  markStopped: () => void,
+  stopAppServer: () => void,
 ): DaemonHandle {
   let stopped: Promise<void> | null = null;
 
   return {
     url: api.url(),
     stop() {
-      stopped ??= stopDaemon(api, staleTimer, appServer);
+      stopped ??= stopDaemon(api, staleTimer, markStopped, stopAppServer);
       return stopped;
     },
   };
@@ -106,12 +183,27 @@ function createDaemonHandle(
 async function stopDaemon(
   api: HttpApi,
   staleTimer: NodeJS.Timeout,
-  appServer: AppServerProcess,
+  markStopped: () => void,
+  stopAppServer: () => void,
 ): Promise<void> {
+  markStopped();
   clearInterval(staleTimer);
   try {
     await api.stop();
   } finally {
-    appServer.stop();
+    stopAppServer();
   }
+}
+
+function readClientCloseMessage(event: unknown): string {
+  if (typeof event === "object" && event !== null) {
+    const code = "code" in event ? String(event.code) : "unknown";
+    const signal = "signal" in event ? String(event.signal) : "unknown";
+    return `App Server connection closed with code ${code} signal ${signal}`;
+  }
+  return "App Server connection closed";
+}
+
+function readErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
