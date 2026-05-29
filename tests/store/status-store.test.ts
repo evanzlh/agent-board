@@ -125,6 +125,38 @@ test("applies turn lifecycle notifications to lastTurn", () => {
   });
 });
 
+test("applies thread status changed notifications and emits agent.updated", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 5000, now: () => now });
+  const events: unknown[] = [];
+  store.on("event", (event) => events.push(event));
+
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+  store.setAppServerConnection({ connected: false });
+  now = 7001;
+  store.markStaleAgents();
+
+  const status = { type: "active" as const, activeFlags: ["waitingOnApproval"] };
+  now = 8000;
+  store.applyNotification({
+    method: "thread/status/changed",
+    params: { threadId: "one", status },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "waiting_approval");
+  assert.deepEqual(agent?.rawStatus, status);
+  assert.equal(agent?.waitingSince, 8000);
+  assert.equal(agent?.lastEventAt, 8000);
+  assert.equal(agent?.stale, false);
+  assert.deepEqual(events.at(-1), {
+    type: "agent.updated",
+    agentId: "one",
+    status: "waiting_approval",
+    at: 8000,
+  });
+});
+
 test("applies item lifecycle notifications by refreshing lastEventAt", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
@@ -135,6 +167,10 @@ test("applies item lifecycle notifications by refreshing lastEventAt", () => {
   assert.equal(store.getAgent("one")?.lastEventAt, 4000);
 
   now = 5000;
-  store.applyNotification({ method: "serverRequest/resolved", params: { threadId: "one" } });
+  store.applyNotification({ method: "item/completed", params: { threadId: "one" } });
   assert.equal(store.getAgent("one")?.lastEventAt, 5000);
+
+  now = 6000;
+  store.applyNotification({ method: "serverRequest/resolved", params: { threadId: "one" } });
+  assert.equal(store.getAgent("one")?.lastEventAt, 6000);
 });
