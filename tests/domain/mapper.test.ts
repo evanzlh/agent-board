@@ -38,6 +38,10 @@ test("mapThreadStatus maps idle", () => {
   assert.equal(mapThreadStatus({ type: "idle" }, null), "idle");
 });
 
+test("mapThreadStatus maps notLoaded to unknown", () => {
+  assert.equal(mapThreadStatus({ type: "notLoaded" }, null), "unknown");
+});
+
 test("mapThreadStatus maps active without flags to working", () => {
   assert.equal(mapThreadStatus({ type: "active", activeFlags: [] }, null), "working");
 });

@@ -32,8 +32,13 @@ test("client initializes and fetches all thread pages", async () => {
   );
   rpc.respond(
     "thread/loaded/list",
-    { data: ["one"], nextCursor: "loaded-page-2" },
-    { data: ["two"], nextCursor: null },
+    { data: ["thread-one"], nextCursor: "loaded-page-2" },
+    { data: ["thread-two"], nextCursor: null },
+  );
+  rpc.respond(
+    "thread/read",
+    { thread: { id: "thread-one", status: { type: "active", activeFlags: [] } } },
+    { thread: { id: "thread-two", status: { type: "idle" } } },
   );
 
   const client = new AppServerClient(rpc);
@@ -41,8 +46,11 @@ test("client initializes and fetches all thread pages", async () => {
   const state = await client.readInitialState();
 
   assert.deepEqual(state, {
-    threads: [{ id: "thread-one" }, { id: "thread-two" }],
-    loadedThreadIds: ["one", "two"],
+    threads: [
+      { id: "thread-one", status: { type: "active", activeFlags: [] } },
+      { id: "thread-two", status: { type: "idle" } },
+    ],
+    loadedThreadIds: ["thread-one", "thread-two"],
   });
   assert.deepEqual(rpc.requests.map((request) => request.method), [
     "initialize",
@@ -50,6 +58,8 @@ test("client initializes and fetches all thread pages", async () => {
     "thread/list",
     "thread/loaded/list",
     "thread/loaded/list",
+    "thread/read",
+    "thread/read",
   ]);
   assert.deepEqual(
     rpc.requests.map((request) => request.params),
@@ -98,8 +108,48 @@ test("client initializes and fetches all thread pages", async () => {
       },
       { cursor: null, limit: 100 },
       { cursor: "loaded-page-2", limit: 100 },
+      { threadId: "thread-one", includeTurns: true },
+      { threadId: "thread-two", includeTurns: true },
     ],
   );
+});
+
+test("client hydrates loaded threads with live thread details", async () => {
+  const rpc = new FakeRpc();
+  rpc.respond("thread/list", {
+    data: [{ id: "one", status: { type: "notLoaded" }, turns: [] }],
+    nextCursor: null,
+    backwardsCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: ["one"], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "one",
+      status: { type: "active", activeFlags: [] },
+      turns: [{ status: "inProgress", startedAt: 1000, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc);
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads, [
+    {
+      id: "one",
+      status: { type: "active", activeFlags: [] },
+      turns: [{ status: "inProgress", startedAt: 1000, completedAt: null }],
+    },
+  ]);
+  assert.deepEqual(state.loadedThreadIds, ["one"]);
+  assert.deepEqual(rpc.requests.map((request) => request.method), [
+    "thread/list",
+    "thread/loaded/list",
+    "thread/read",
+  ]);
+  assert.deepEqual(rpc.requests.at(-1)?.params, {
+    threadId: "one",
+    includeTurns: true,
+  });
 });
 
 test("client rejects repeated pagination cursors", async () => {

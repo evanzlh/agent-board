@@ -42,7 +42,8 @@ export class AppServerClient extends EventEmitter {
   async readInitialState(): Promise<InitialAppServerState> {
     const threads = await this.#readAllThreads();
     const loadedThreadIds = await this.#readAllLoadedThreadIds();
-    return { threads, loadedThreadIds };
+    const loadedThreads = await this.#readLoadedThreads(loadedThreadIds);
+    return { threads: mergeLoadedThreads(threads, loadedThreads), loadedThreadIds };
   }
 
   async #readAllThreads(): Promise<AppServerThread[]> {
@@ -93,6 +94,44 @@ export class AppServerClient extends EventEmitter {
 
     return all;
   }
+
+  async #readLoadedThreads(threadIds: string[]): Promise<AppServerThread[]> {
+    const threads: AppServerThread[] = [];
+    for (const threadId of threadIds) {
+      const response = (await this.#rpc.request("thread/read", {
+        threadId,
+        includeTurns: true,
+      })) as { thread?: AppServerThread };
+      if (response.thread) {
+        threads.push(response.thread);
+      }
+    }
+    return threads;
+  }
+}
+
+function mergeLoadedThreads(
+  threads: AppServerThread[],
+  loadedThreads: AppServerThread[],
+): AppServerThread[] {
+  if (loadedThreads.length === 0) {
+    return threads;
+  }
+
+  const loadedById = new Map(loadedThreads.map((thread) => [thread.id, thread]));
+  const seen = new Set<string>();
+  const merged = threads.map((thread) => {
+    seen.add(thread.id);
+    return loadedById.get(thread.id) ?? thread;
+  });
+
+  for (const thread of loadedThreads) {
+    if (!seen.has(thread.id)) {
+      merged.push(thread);
+    }
+  }
+
+  return merged;
 }
 
 function readNextCursor(method: string, cursor: string | null, seenCursors: Set<string>): string | null {

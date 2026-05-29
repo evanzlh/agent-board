@@ -52,6 +52,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   const trackedAppServers = new Set<AppServerProcess>();
   let stopped = false;
   let reconnecting: Promise<void> | null = null;
+  let refreshing: Promise<void> | null = null;
   trackedAppServers.add(appServer);
 
   const connect = async (throwOnFailure: boolean): Promise<void> => {
@@ -128,12 +129,51 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     });
   };
 
+  const refreshSnapshot = (): void => {
+    if (
+      stopped ||
+      reconnecting ||
+      refreshing ||
+      !currentClient ||
+      !store.getHealth().appServer.connected
+    ) {
+      return;
+    }
+
+    const client = currentClient;
+    refreshing = (async () => {
+      try {
+        const state = await client.readInitialState();
+        if (stopped || currentClient !== client) {
+          return;
+        }
+        store.replaceThreads(state.threads);
+        store.setAppServerConnection({ connected: true });
+      } catch (error) {
+        if (stopped || currentClient !== client) {
+          return;
+        }
+        store.setAppServerConnection({
+          connected: false,
+          lastError: readErrorMessage(error),
+        });
+        scheduleReconnect();
+      } finally {
+        refreshing = null;
+      }
+    })();
+  };
+
   try {
     await connect(true);
 
     staleTimer = setInterval(() => {
-      store.markStaleAgents();
-      scheduleReconnect();
+      if (store.getHealth().appServer.connected) {
+        refreshSnapshot();
+      } else {
+        store.markStaleAgents();
+        scheduleReconnect();
+      }
     }, options.config.refreshIntervalMs);
     const httpApiFactory = options.httpApiFactory ?? createHttpApi;
     api = httpApiFactory({

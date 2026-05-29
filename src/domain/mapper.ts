@@ -21,8 +21,12 @@ export function mapThreadStatus(
     return "unknown";
   }
 
-  if (status.type === "idle" || status.type === "notLoaded") {
+  if (status.type === "idle") {
     return "idle";
+  }
+
+  if (status.type === "notLoaded") {
+    return "unknown";
   }
 
   if (status.type === "systemError") {

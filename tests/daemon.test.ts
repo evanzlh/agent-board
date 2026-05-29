@@ -179,6 +179,49 @@ test("startDaemon applies client notifications to the status store", async () =>
   await daemon.stop();
 });
 
+test("daemon refreshes connected app server snapshots on the refresh interval", async () => {
+  const client = new FakeClient();
+  client.threads = [thread("one", { type: "idle" })];
+  const daemon = await startDaemon({
+    config: {
+      host: "127.0.0.1",
+      port: 0,
+      autoStartAppServer: true,
+      refreshIntervalMs: 10,
+      staleAfterMs: 1000,
+    },
+    supervisor: {
+      async start() {
+        return {
+          mode: "managed-child",
+          cliVersion: "codex-cli 0.135.0",
+          process: { kill: () => true },
+          stop: () => {},
+        };
+      },
+    },
+    clientFactory: () => client,
+  });
+
+  try {
+    client.threads = [
+      thread("one", { type: "idle" }),
+      thread("two", { type: "active", activeFlags: [] }),
+    ];
+
+    await waitFor(async () => {
+      const status = await (await fetch(`${daemon.url}/status`)).json();
+      assert.ok(client.readCalls >= 2);
+      assert.deepEqual(
+        status.agents.map((agent: { id: string }) => agent.id),
+        ["one", "two"],
+      );
+    });
+  } finally {
+    await daemon.stop();
+  }
+});
+
 test("startDaemon stops app server when client initialization fails", async () => {
   const client = new FakeClient();
   client.initializeError = new Error("initialize failed");

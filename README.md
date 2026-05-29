@@ -58,7 +58,7 @@ node src/cli.ts daemon [options]
 | `--host <host>` | `127.0.0.1` | HTTP bind host. |
 | `--port <port>` | `17345` | HTTP bind port. Use `0` for an ephemeral test port. |
 | `--no-start-app-server` | disabled | Skip App Server auto-start and connect through `codex app-server proxy` only. |
-| `--refresh-interval-ms <ms>` | `5000` | Reconnect and stale-check cadence. |
+| `--refresh-interval-ms <ms>` | `5000` | Snapshot refresh, reconnect, and stale-check cadence. |
 | `--stale-after-ms <ms>` | `30000` | Mark agents stale after App Server disconnects and no events arrive. |
 
 Example:
@@ -76,7 +76,7 @@ On startup, `codex-status` runs `codex --version`, then connects to the Codex Ap
 | `external-daemon` | `codex app-server daemon start` succeeds, or `--no-start-app-server` is used. | A local `codex app-server proxy` process. The external daemon remains owned by Codex CLI. |
 | `managed-child` | The managed standalone daemon is unavailable and auto-start is enabled. | A child `codex app-server --listen stdio://` process. |
 
-While running, the daemon reads the initial App Server thread list, applies App Server notifications, marks agents stale after disconnects, and attempts reconnects on the configured refresh interval. On shutdown, it stops only the processes it started.
+While running, the daemon reads the initial App Server thread list, refreshes the App Server snapshot on the configured interval, applies App Server notifications, marks agents stale after disconnects, and attempts reconnects when needed. On shutdown, it stops only the processes it started.
 
 ## Web UI
 
@@ -167,7 +167,8 @@ Current status mapping:
 
 | App Server Signal | Public Status |
 | --- | --- |
-| `idle`, `notLoaded` | `idle` |
+| `idle` | `idle` |
+| `notLoaded` | `unknown` |
 | `active` | `working` |
 | `active` with `waitingOnApproval` | `waiting_approval` |
 | `active` with `waitingOnUserInput` | `waiting_input` |
@@ -216,5 +217,6 @@ scripts/           Real App Server smoke test
 | HTTP port is busy | Start with `--port <free-port>` or `--port 0` for an ephemeral port. |
 | `/health` shows `connected: false` | Inspect `appServer.lastError`; the daemon will retry on `--refresh-interval-ms`. |
 | Agents are shown as `stale` | App Server disconnected and no fresh events arrived before `--stale-after-ms`. |
+| Agent `rawStatus` is `notLoaded` | App Server has metadata for the thread but no live runtime loaded. Live status is only available for App Server-loaded threads or fresh notifications. |
 | No agents appear | Start or resume Codex work in the same local environment, then refresh `/ui` or query `/status`. |
 | `npm run smoke:real` fails | Verify the installed Codex CLI supports `codex app-server` commands. |
