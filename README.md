@@ -28,6 +28,8 @@ Then visit:
 http://127.0.0.1:17345/ui
 ```
 
+If you started the daemon with `--port 18000`, open `http://127.0.0.1:18000/ui` instead.
+
 The UI is read-only. It shows the current status snapshot, filters agents locally, and
 polls `/health` and `/status` every few seconds.
 
