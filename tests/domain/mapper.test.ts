@@ -144,3 +144,21 @@ test("normalizeThread returns stable public fields and preserves rawStatus", () 
   assert.equal(agent.waitingSince, 1780010200000);
   assert.equal(agent.stale, false);
 });
+
+test("normalizeThread uses in-progress turn as active evidence for notLoaded threads", () => {
+  const agent = normalizeThread(
+    thread({
+      status: { type: "notLoaded" },
+      turns: [{ status: "inProgress", startedAt: 1780010200, completedAt: null }],
+    }),
+    { nowMs: 1780010200000 },
+  );
+
+  assert.equal(agent.status, "working");
+  assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
+  assert.deepEqual(agent.lastTurn, {
+    status: "inProgress",
+    startedAt: 1780010200,
+    completedAt: null,
+  });
+});

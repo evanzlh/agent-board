@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { VERSION } from "../version.ts";
-import { mapThreadStatus, normalizeThread } from "../domain/mapper.ts";
+import { inferRawStatusFromTurn, mapThreadStatus, normalizeThread } from "../domain/mapper.ts";
 import type {
   AgentKind,
   AgentLastTurn,
@@ -250,6 +250,7 @@ export class StatusStore extends EventEmitter {
       ...current,
       lastTurn: nextTurn,
       status: turnPublicStatus(nextTurn.status, current.status),
+      rawStatus: inferRawStatusFromTurn(current.rawStatus, nextTurn),
       lastEventAt: this.#now(),
       stale: false,
     } satisfies AgentStatus;

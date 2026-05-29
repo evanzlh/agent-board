@@ -187,6 +187,22 @@ test("idle agent receiving in-progress turn becomes working", () => {
   assert.equal(agent?.status, "working");
 });
 
+test("turn started replaces notLoaded rawStatus with active evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "notLoaded" })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/started",
+    params: { threadId: "one", turn: { status: "inProgress", startedAt: 2000 } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
+});
+
 test("applies thread status changed notifications and emits agent.updated", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 5000, now: () => now });

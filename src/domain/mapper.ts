@@ -47,6 +47,16 @@ export function mapThreadStatus(
   return "unknown";
 }
 
+export function inferRawStatusFromTurn(
+  status: AppServerThreadStatus | unknown,
+  lastTurn: Pick<AgentLastTurn, "status"> | null,
+): AppServerThreadStatus | unknown {
+  if (lastTurn?.status === "inProgress" && isInactiveThreadStatus(status)) {
+    return { type: "active", activeFlags: [] };
+  }
+  return status;
+}
+
 export function deriveAgentKind(thread: AppServerThread): AgentKind {
   if (thread.agentNickname || thread.agentRole || getSubAgentSource(thread.source) !== null) {
     return "sub_agent";
@@ -80,7 +90,8 @@ export function deriveDisplayName(thread: AppServerThread): string {
 export function normalizeThread(thread: AppServerThread, options: NormalizeOptions): AgentStatus {
   const previous = options.previous ?? null;
   const lastTurn = normalizeLastTurn(thread.turns.at(-1) ?? null);
-  const publicStatus = mapThreadStatus(thread.status, lastTurn);
+  const rawStatus = inferRawStatusFromTurn(thread.status, lastTurn);
+  const publicStatus = mapThreadStatus(rawStatus, lastTurn);
   const waitingSince = isWaitingStatus(publicStatus)
     ? previous && previous.status === publicStatus
       ? previous.waitingSince
@@ -93,7 +104,7 @@ export function normalizeThread(thread: AppServerThread, options: NormalizeOptio
     kind: deriveAgentKind(thread),
     displayName: deriveDisplayName(thread),
     status: publicStatus,
-    rawStatus: thread.status,
+    rawStatus,
     cwd: thread.cwd,
     preview: thread.preview,
     modelProvider: thread.modelProvider,
@@ -125,6 +136,13 @@ function normalizeLastTurn(turn: AppServerLastTurn | null): AgentLastTurn | null
 
 function isWaitingStatus(status: AgentPublicStatus): boolean {
   return status === "waiting_approval" || status === "waiting_input";
+}
+
+function isInactiveThreadStatus(status: unknown): boolean {
+  if (!isObject(status) || typeof status.type !== "string") {
+    return true;
+  }
+  return status.type === "notLoaded" || status.type === "idle";
 }
 
 function getSubAgentSource(source: unknown): unknown {

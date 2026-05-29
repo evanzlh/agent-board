@@ -150,7 +150,7 @@ Each agent record is derived from one Codex App Server thread.
 | `kind` | `main_agent`, `sub_agent`, or `unknown`. |
 | `displayName` | Best available name from nickname, role, thread name, preview, or ID. |
 | `status` | Public normalized status. |
-| `rawStatus` | Original App Server status payload. |
+| `rawStatus` | Latest status evidence. Usually the App Server thread status; `active` can be inferred from an in-progress turn when thread metadata is still `notLoaded`. |
 | `cwd` | Working directory for the thread. |
 | `preview` | Thread preview text from Codex. |
 | `modelProvider` | Model provider reported by Codex. |
@@ -217,6 +217,6 @@ scripts/           Real App Server smoke test
 | HTTP port is busy | Start with `--port <free-port>` or `--port 0` for an ephemeral port. |
 | `/health` shows `connected: false` | Inspect `appServer.lastError`; the daemon will retry on `--refresh-interval-ms`. |
 | Agents are shown as `stale` | App Server disconnected and no fresh events arrived before `--stale-after-ms`. |
-| Agent `rawStatus` is `notLoaded` | App Server has metadata for the thread but no live runtime loaded. Live status is only available for App Server-loaded threads or fresh notifications. |
+| Agent `rawStatus` is `notLoaded` | App Server has metadata for the thread but no live runtime loaded, and no in-progress turn or fresh status notification has been observed yet. |
 | No agents appear | Start or resume Codex work in the same local environment, then refresh `/ui` or query `/status`. |
 | `npm run smoke:real` fails | Verify the installed Codex CLI supports `codex app-server` commands. |
