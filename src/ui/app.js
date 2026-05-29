@@ -1,3 +1,270 @@
-import { EMPTY_VALUE } from "/ui/view-model.js";
+import {
+  EMPTY_VALUE,
+  compactJson,
+  filterAgents,
+  formatTimestamp,
+  safeJson,
+  valueOrEmpty,
+} from "/ui/view-model.js";
 
-document.getElementById("health-line").textContent = `Ready ${EMPTY_VALUE}`;
+const REFRESH_INTERVAL_MS = 3000;
+
+const state = {
+  agents: [],
+  summary: null,
+  health: null,
+  filters: {
+    status: "all",
+    kind: "all",
+    cwd: "",
+    search: "",
+  },
+  expandedAgentId: null,
+  autoRefreshEnabled: true,
+  lastLoadedAt: null,
+  lastError: null,
+  generatedAt: null,
+};
+
+const elements = {
+  healthLine: document.getElementById("health-line"),
+  errorBanner: document.getElementById("error-banner"),
+  summary: document.getElementById("summary"),
+  tableBody: document.getElementById("agent-table-body"),
+  visibleCount: document.getElementById("visible-count"),
+  generatedAt: document.getElementById("generated-at"),
+  statusFilter: document.getElementById("status-filter"),
+  kindFilter: document.getElementById("kind-filter"),
+  cwdFilter: document.getElementById("cwd-filter"),
+  searchFilter: document.getElementById("search-filter"),
+  autoRefresh: document.getElementById("auto-refresh"),
+  refreshButton: document.getElementById("refresh-button"),
+};
+
+wireControls();
+render();
+void loadSnapshot();
+setInterval(() => {
+  if (state.autoRefreshEnabled) {
+    void loadSnapshot();
+  }
+}, REFRESH_INTERVAL_MS);
+
+function wireControls() {
+  elements.refreshButton.addEventListener("click", () => {
+    void loadSnapshot();
+  });
+  elements.autoRefresh.addEventListener("change", () => {
+    state.autoRefreshEnabled = elements.autoRefresh.checked;
+    renderHealth();
+  });
+  elements.statusFilter.addEventListener("change", () => {
+    state.filters.status = elements.statusFilter.value;
+    renderTable();
+  });
+  elements.kindFilter.addEventListener("change", () => {
+    state.filters.kind = elements.kindFilter.value;
+    renderTable();
+  });
+  elements.cwdFilter.addEventListener("input", () => {
+    state.filters.cwd = elements.cwdFilter.value;
+    renderTable();
+  });
+  elements.searchFilter.addEventListener("input", () => {
+    state.filters.search = elements.searchFilter.value;
+    renderTable();
+  });
+}
+
+async function loadSnapshot() {
+  elements.refreshButton.disabled = true;
+  try {
+    const [healthResult, statusResult] = await Promise.allSettled([
+      fetchJson("/health"),
+      fetchJson("/status"),
+    ]);
+
+    const errors = [];
+    if (healthResult.status === "fulfilled") {
+      state.health = healthResult.value;
+    } else {
+      errors.push(`health: ${readError(healthResult.reason)}`);
+    }
+
+    if (statusResult.status === "fulfilled") {
+      state.summary = statusResult.value.summary ?? null;
+      state.agents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
+      state.generatedAt = statusResult.value.generatedAt ?? null;
+      if (state.expandedAgentId && !state.agents.some((agent) => agent.id === state.expandedAgentId)) {
+        state.expandedAgentId = null;
+      }
+    } else {
+      errors.push(`status: ${readError(statusResult.reason)}`);
+    }
+
+    state.lastLoadedAt = Date.now();
+    state.lastError = errors.length > 0 ? errors.join("; ") : null;
+  } finally {
+    elements.refreshButton.disabled = false;
+    render();
+  }
+}
+
+async function fetchJson(path) {
+  const response = await fetch(path, {
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return await response.json();
+}
+
+function render() {
+  renderHealth();
+  renderError();
+  renderSummary();
+  renderTable();
+}
+
+function renderHealth() {
+  const appServer = state.health?.appServer;
+  const daemon = state.health?.daemon;
+  const connected = appServer?.connected ? "connected" : "disconnected";
+  const mode = valueOrEmpty(appServer?.mode);
+  const cliVersion = valueOrEmpty(appServer?.cliVersion);
+  const daemonVersion = valueOrEmpty(daemon?.version);
+  const loaded = state.lastLoadedAt ? formatTimestamp(state.lastLoadedAt) : EMPTY_VALUE;
+  const refresh = state.autoRefreshEnabled ? "auto 3s" : "paused";
+  elements.healthLine.textContent = `${connected} · mode ${mode} · cli ${cliVersion} · daemon ${daemonVersion} · loaded ${loaded} · ${refresh}`;
+}
+
+function renderError() {
+  const healthError = state.health?.appServer?.lastError;
+  const errors = [state.lastError, healthError].filter(Boolean);
+  if (errors.length === 0) {
+    elements.errorBanner.hidden = true;
+    elements.errorBanner.textContent = "";
+    return;
+  }
+  elements.errorBanner.hidden = false;
+  elements.errorBanner.textContent = errors.join(" · ");
+}
+
+function renderSummary() {
+  const summary = state.summary ?? {};
+  const items = [
+    ["total", summary.total],
+    ["working", summary.working],
+    ["idle", summary.idle],
+    ["waiting_approval", summary.waitingApproval],
+    ["waiting_input", summary.waitingInput],
+    ["error", summary.error],
+    ["unknown", summary.unknown],
+  ];
+
+  elements.summary.replaceChildren(
+    ...items.map(([label, value]) => {
+      const card = document.createElement("article");
+      card.className = "summary-card";
+      const labelElement = document.createElement("span");
+      labelElement.textContent = label;
+      const valueElement = document.createElement("strong");
+      valueElement.textContent = String(value ?? 0);
+      card.append(labelElement, valueElement);
+      return card;
+    }),
+  );
+}
+
+function renderTable() {
+  const visibleAgents = filterAgents(state.agents, state.filters);
+  elements.visibleCount.textContent = `${visibleAgents.length} agent${visibleAgents.length === 1 ? "" : "s"}`;
+  elements.generatedAt.textContent = state.generatedAt
+    ? `snapshot ${formatTimestamp(state.generatedAt)}`
+    : "No snapshot loaded";
+
+  if (visibleAgents.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.className = "empty-state";
+    cell.colSpan = 9;
+    cell.textContent = state.agents.length === 0 ? "No agents loaded." : "No agents match the filters.";
+    row.append(cell);
+    elements.tableBody.replaceChildren(row);
+    return;
+  }
+
+  const rows = [];
+  for (const agent of visibleAgents) {
+    rows.push(renderAgentRow(agent));
+    if (agent.id === state.expandedAgentId) {
+      rows.push(renderDetailRow(agent));
+    }
+  }
+  elements.tableBody.replaceChildren(...rows);
+}
+
+function renderAgentRow(agent) {
+  const row = document.createElement("tr");
+  row.className = "agent-row";
+  if (agent.id === state.expandedAgentId) {
+    row.classList.add("is-expanded");
+  }
+  row.addEventListener("click", () => {
+    state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
+    renderTable();
+  });
+
+  row.append(
+    cell(renderStatus(agent.status)),
+    textCell(agent.kind),
+    textCell(agent.displayName),
+    textCell(compactJson(agent.rawStatus), "json-inline"),
+    textCell(agent.lastTurn?.status),
+    textCell(formatTimestamp(agent.waitingSince)),
+    textCell(formatTimestamp(agent.updatedAt)),
+    textCell(agent.cwd),
+    textCell(agent.id, "json-inline"),
+  );
+  return row;
+}
+
+function renderDetailRow(agent) {
+  const row = document.createElement("tr");
+  row.className = "detail-row";
+  const detail = document.createElement("td");
+  detail.colSpan = 9;
+  const pre = document.createElement("pre");
+  pre.className = "detail-json";
+  pre.textContent = safeJson(agent);
+  detail.append(pre);
+  row.append(detail);
+  return row;
+}
+
+function renderStatus(status) {
+  const pill = document.createElement("span");
+  pill.className = "status-pill";
+  pill.dataset.status = valueOrEmpty(status);
+  pill.textContent = valueOrEmpty(status);
+  return pill;
+}
+
+function textCell(value, extraClass = "") {
+  const span = document.createElement("span");
+  span.className = `cell-truncate ${extraClass}`.trim();
+  span.textContent = valueOrEmpty(value);
+  span.title = span.textContent;
+  return cell(span);
+}
+
+function cell(child) {
+  const td = document.createElement("td");
+  td.append(child);
+  return td;
+}
+
+function readError(error) {
+  return error instanceof Error ? error.message : String(error);
+}
