@@ -15,7 +15,7 @@ The first version does not provide a Web UI or terminal UI. It focuses on a reli
 - Represent Codex threads as the reliable base unit.
 - Add sub-agent metadata and parent-child information when App Server provides it.
 - Detect and expose statuses including idle, working, waiting for approval, waiting for user input, error, and unknown.
-- Default to starting or reusing the Codex App Server daemon, with an option to disable auto-start.
+- Default to starting or reusing Codex App Server, with an option to disable auto-start.
 - Keep the daemon read-only: no task start, stop, resume, fork, archive, approve, or reject actions.
 
 ## Non-Goals
@@ -36,15 +36,21 @@ The daemon has four main components.
 
 `AppServerSupervisor` ensures Codex App Server is available.
 
-On startup, it checks for `codex`, reads `codex --version`, and verifies App Server availability. By default, it starts or reuses the Codex App Server daemon by running:
+On startup, it checks for `codex`, reads `codex --version`, and verifies App Server availability. By default, it first tries to start or reuse the Codex App Server daemon by running:
 
 ```bash
 codex app-server daemon start
 ```
 
+Some Codex installations do not support the managed daemon command. For example, non-standalone installs can return an error that the standalone Codex install is missing. When daemon startup fails for this reason and `auto_start_app_server` is enabled, `codex-status` falls back to starting a managed foreground App Server child process:
+
+```bash
+codex app-server --listen stdio://
+```
+
 When `--no-start-app-server` is set, it only tries to connect to an existing App Server and fails startup if it cannot connect.
 
-`codex-status` does not stop Codex App Server on shutdown, because that App Server may be shared with other clients.
+`codex-status` does not stop an external Codex App Server daemon on shutdown, because that App Server may be shared with other clients. It does stop a foreground App Server child process that it started itself.
 
 ### AppServerClient
 
@@ -256,23 +262,26 @@ Startup flow:
 1. Load config and CLI flags.
 2. Verify that `codex` exists.
 3. Read the local Codex CLI version.
-4. Ensure App Server daemon availability, starting it by default when needed.
-5. Connect to App Server.
-6. Read initial thread state.
-7. Subscribe to App Server notifications.
-8. Start the local HTTP API.
+4. Ensure App Server availability, starting or reusing the daemon by default when supported.
+5. If daemon startup is unsupported and auto-start is enabled, start a managed foreground App Server child process.
+6. Connect to App Server.
+7. Read initial thread state.
+8. Subscribe to App Server notifications.
+9. Start the local HTTP API.
 
 Shutdown flow:
 
 1. Stop accepting new HTTP requests.
 2. Close SSE clients.
 3. Disconnect from App Server.
-4. Exit without stopping the Codex App Server daemon.
+4. Stop the managed foreground App Server child process, if `codex-status` started one.
+5. Exit without stopping any external Codex App Server daemon.
 
 ## Error Handling
 
 - If `codex` is missing, startup fails.
-- If App Server startup fails, startup fails and surfaces the Codex command stderr.
+- If App Server daemon startup is unsupported but foreground App Server startup succeeds, startup continues in managed-child mode.
+- If both daemon startup and foreground App Server startup fail, startup fails and surfaces the Codex command stderr.
 - If `--no-start-app-server` is set and no App Server is available, startup fails.
 - If App Server disconnects after startup, HTTP remains available and `/health.appServer.connected` becomes `false`.
 - During App Server disconnects, existing agents keep their last known status and are marked `stale=true` after `stale_after_ms`.
@@ -324,7 +333,7 @@ They cover:
 
 ### Real Environment Smoke Test
 
-A non-default smoke test may start or connect to a real `codex app-server daemon` and verify `/health` and `/status`.
+A non-default smoke test may start or connect to a real Codex App Server, using either the daemon or managed foreground mode, and verify `/health` and `/status`.
 
 This smoke test should not be required for normal CI because it depends on local Codex installation, auth state, and CLI version.
 
