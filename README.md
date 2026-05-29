@@ -16,6 +16,21 @@ Use a custom port:
 node src/cli.ts daemon --port 18000
 ```
 
+Open the built-in Web UI from the same daemon:
+
+```bash
+node src/cli.ts daemon
+```
+
+Then visit:
+
+```text
+http://127.0.0.1:17345/ui
+```
+
+The UI is read-only. It shows the current status snapshot, filters agents locally, and
+polls `/health` and `/status` every few seconds.
+
 Connect only to an already-running App Server:
 
 ```bash
