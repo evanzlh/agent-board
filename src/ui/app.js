@@ -21,24 +21,25 @@ const state = {
   },
   expandedAgentId: null,
   autoRefreshEnabled: true,
+  isLoading: false,
   lastLoadedAt: null,
   lastError: null,
   generatedAt: null,
 };
 
 const elements = {
-  healthLine: document.getElementById("health-line"),
-  errorBanner: document.getElementById("error-banner"),
-  summary: document.getElementById("summary"),
-  tableBody: document.getElementById("agent-table-body"),
-  visibleCount: document.getElementById("visible-count"),
-  generatedAt: document.getElementById("generated-at"),
-  statusFilter: document.getElementById("status-filter"),
-  kindFilter: document.getElementById("kind-filter"),
-  cwdFilter: document.getElementById("cwd-filter"),
-  searchFilter: document.getElementById("search-filter"),
-  autoRefresh: document.getElementById("auto-refresh"),
-  refreshButton: document.getElementById("refresh-button"),
+  healthLine: requiredElement("health-line"),
+  errorBanner: requiredElement("error-banner"),
+  summary: requiredElement("summary"),
+  tableBody: requiredElement("agent-table-body"),
+  visibleCount: requiredElement("visible-count"),
+  generatedAt: requiredElement("generated-at"),
+  statusFilter: requiredElement("status-filter"),
+  kindFilter: requiredElement("kind-filter"),
+  cwdFilter: requiredElement("cwd-filter"),
+  searchFilter: requiredElement("search-filter"),
+  autoRefresh: requiredElement("auto-refresh"),
+  refreshButton: requiredElement("refresh-button"),
 };
 
 wireControls();
@@ -77,6 +78,10 @@ function wireControls() {
 }
 
 async function loadSnapshot() {
+  if (state.isLoading) {
+    return;
+  }
+  state.isLoading = true;
   elements.refreshButton.disabled = true;
   try {
     const [healthResult, statusResult] = await Promise.allSettled([
@@ -105,9 +110,18 @@ async function loadSnapshot() {
     state.lastLoadedAt = Date.now();
     state.lastError = errors.length > 0 ? errors.join("; ") : null;
   } finally {
+    state.isLoading = false;
     elements.refreshButton.disabled = false;
     render();
   }
+}
+
+function requiredElement(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    throw new Error(`Missing required UI element #${id}`);
+  }
+  return element;
 }
 
 async function fetchJson(path) {
