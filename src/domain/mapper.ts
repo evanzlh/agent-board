@@ -17,19 +17,13 @@ export function mapThreadStatus(
     return "error";
   }
 
-  if (hasActiveTurnEvidence(lastTurn) && isInactiveThreadStatus(status)) {
-    return "working";
-  }
-
   if (!isObject(status) || typeof status.type !== "string") {
-    return "unknown";
-  }
-
-  if (status.type === "idle") {
-    return "idle";
-  }
-
-  if (status.type === "notLoaded") {
+    if (hasTerminalTurnEvidence(lastTurn)) {
+      return "finished";
+    }
+    if (hasActiveTurnEvidence(lastTurn)) {
+      return "working";
+    }
     return "unknown";
   }
 
@@ -45,6 +39,25 @@ export function mapThreadStatus(
     if (flags.includes("waitingOnUserInput")) {
       return "waiting_input";
     }
+  }
+
+  if (hasTerminalTurnEvidence(lastTurn) && status.type !== "idle") {
+    return "finished";
+  }
+
+  if (hasActiveTurnEvidence(lastTurn) && isInactiveThreadStatus(status)) {
+    return "working";
+  }
+
+  if (status.type === "idle") {
+    return "idle";
+  }
+
+  if (status.type === "notLoaded") {
+    return "unknown";
+  }
+
+  if (status.type === "active") {
     return "working";
   }
 
@@ -102,10 +115,11 @@ export function deriveDisplayName(thread: AppServerThread): string {
 
 export function normalizeThread(thread: AppServerThread, options: NormalizeOptions): AgentStatus {
   const previous = options.previous ?? null;
-  const shouldPreservePrevious = shouldPreservePreviousEvidence(thread.status, previous);
+  const currentLastTurn = normalizeLastTurn(thread.turns.at(-1) ?? null);
+  const shouldPreservePrevious =
+    currentLastTurn === null && shouldPreservePreviousEvidence(thread.status, previous);
   const lastTurn =
-    normalizeLastTurn(thread.turns.at(-1) ?? null) ??
-    (shouldPreservePrevious ? previous.lastTurn : null);
+    currentLastTurn ?? (shouldPreservePrevious ? previous.lastTurn : null);
   const statusInput = shouldPreservePrevious ? previous.rawStatus : thread.status;
   const rawStatus = inferRawStatusFromTurn(statusInput, lastTurn);
   const publicStatus = mapThreadStatus(rawStatus, lastTurn);
@@ -184,6 +198,15 @@ function hasActiveTurnEvidence(
     return false;
   }
   return turn.status === "inProgress" || (turn.status === "interrupted" && turn.completedAt === null);
+}
+
+function hasTerminalTurnEvidence(
+  turn: Pick<AgentLastTurn, "status" | "completedAt"> | null,
+): boolean {
+  if (!turn) {
+    return false;
+  }
+  return turn.status === "completed" || (turn.status === "interrupted" && turn.completedAt !== null);
 }
 
 function isNotLoadedThreadStatus(status: unknown): boolean {

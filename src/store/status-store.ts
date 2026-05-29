@@ -18,6 +18,7 @@ export type StatusSummary = {
   total: number;
   working: number;
   idle: number;
+  finished: number;
   waitingApproval: number;
   waitingInput: number;
   error: number;
@@ -256,7 +257,7 @@ export class StatusStore extends EventEmitter {
     const updated = {
       ...current,
       lastTurn: nextTurn,
-      status: turnPublicStatus(nextTurn, current.status),
+      status: mapThreadStatus(rawStatus, nextTurn),
       rawStatus,
       lastEventAt: this.#now(),
       stale: false,
@@ -304,6 +305,7 @@ function summarizeAgents(agents: AgentStatus[]): StatusSummary {
     total: agents.length,
     working: 0,
     idle: 0,
+    finished: 0,
     waitingApproval: 0,
     waitingInput: 0,
     error: 0,
@@ -313,6 +315,7 @@ function summarizeAgents(agents: AgentStatus[]): StatusSummary {
   for (const agent of agents) {
     if (agent.status === "working") summary.working += 1;
     else if (agent.status === "idle") summary.idle += 1;
+    else if (agent.status === "finished") summary.finished += 1;
     else if (agent.status === "waiting_approval") summary.waitingApproval += 1;
     else if (agent.status === "waiting_input") summary.waitingInput += 1;
     else if (agent.status === "error") summary.error += 1;
@@ -326,19 +329,6 @@ function readTurnStatus(value: unknown): AgentLastTurn["status"] {
   return value === "completed" || value === "interrupted" || value === "failed" || value === "inProgress"
     ? value
     : "unknown";
-}
-
-function turnPublicStatus(
-  turn: AgentLastTurn,
-  currentStatus: AgentPublicStatus,
-): AgentPublicStatus {
-  if (turn.status === "failed") {
-    return "error";
-  }
-  if (turn.status === "inProgress" || (turn.status === "interrupted" && turn.completedAt === null)) {
-    return "working";
-  }
-  return currentStatus;
 }
 
 function readNumber(value: unknown): number | null {

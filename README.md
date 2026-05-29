@@ -85,7 +85,7 @@ The built-in UI is intentionally operational rather than decorative. It is usefu
 It includes:
 
 - App Server connection line with mode, CLI version, daemon version, last load time, and refresh state.
-- Summary counters for total, working, idle, approval-waiting, input-waiting, error, and unknown agents.
+- Summary counters for total, working, idle, finished, approval-waiting, input-waiting, error, and unknown agents.
 - Filterable table by status, kind, working directory, or free-text search.
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`.
 - Expandable per-agent JSON details for debugging raw status and timestamps.
@@ -123,6 +123,7 @@ curl "http://127.0.0.1:17345/agents?cwd=/home/wh/my_project/codex_status"
     "total": 2,
     "working": 1,
     "idle": 1,
+    "finished": 0,
     "waitingApproval": 0,
     "waitingInput": 0,
     "error": 0,
@@ -150,7 +151,7 @@ Each agent record is derived from one Codex App Server thread.
 | `kind` | `main_agent`, `sub_agent`, or `unknown`. |
 | `displayName` | Best available name from nickname, role, thread name, preview, or ID. |
 | `status` | Public normalized status. |
-| `rawStatus` | Latest status evidence. Usually the App Server thread status; `active` can be inferred from an in-progress turn when thread metadata is still `notLoaded`. |
+| `rawStatus` | Latest status evidence. Usually the App Server thread status; `active` can be inferred from in-progress turn or item activity when thread metadata is still `notLoaded`. |
 | `cwd` | Working directory for the thread. |
 | `preview` | Thread preview text from Codex. |
 | `modelProvider` | Model provider reported by Codex. |
@@ -172,10 +173,9 @@ Current status mapping:
 | `active` | `working` |
 | `active` with `waitingOnApproval` | `waiting_approval` |
 | `active` with `waitingOnUserInput` | `waiting_input` |
+| Completed turn, or interrupted turn with `completedAt` | `finished` |
 | `systemError` or failed turn | `error` |
 | Unrecognized payload | `unknown` |
-
-`finished` is part of the public status contract and UI filter set, but the current mapper only emits it when future App Server state support is added.
 
 ## Development
 

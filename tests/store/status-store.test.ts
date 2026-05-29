@@ -29,17 +29,21 @@ function thread(id: string, status: AppServerThread["status"], cwd = "/repo"): A
 
 test("ingests initial threads and computes summary", () => {
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => 1000 });
+  const finished = thread("finished-1", { type: "notLoaded" });
+  finished.turns = [{ status: "completed", startedAt: 1, completedAt: 2 }];
 
   store.replaceThreads([
     thread("idle-1", { type: "idle" }),
     thread("work-1", { type: "active", activeFlags: [] }),
     thread("approval-1", { type: "active", activeFlags: ["waitingOnApproval"] }),
+    finished,
   ]);
 
   const snapshot = store.getStatus();
-  assert.equal(snapshot.summary.total, 3);
+  assert.equal(snapshot.summary.total, 4);
   assert.equal(snapshot.summary.idle, 1);
   assert.equal(snapshot.summary.working, 1);
+  assert.equal(snapshot.summary.finished, 1);
   assert.equal(snapshot.summary.waitingApproval, 1);
 });
 
@@ -141,6 +145,7 @@ test("applies turn lifecycle notifications to lastTurn", () => {
     method: "turn/completed",
     params: { threadId: "one", turn: { status: "completed", completedAt: 3000 } },
   });
+  assert.equal(store.getAgent("one")?.status, "finished");
   assert.deepEqual(store.getAgent("one")?.lastTurn, {
     status: "completed",
     startedAt: 2000,

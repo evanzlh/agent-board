@@ -188,6 +188,7 @@ function renderSummary() {
     ["total", summary.total],
     ["working", summary.working],
     ["idle", summary.idle],
+    ["finished", summary.finished],
     ["waiting_approval", summary.waitingApproval],
     ["waiting_input", summary.waitingInput],
     ["error", summary.error],

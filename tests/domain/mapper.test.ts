@@ -65,6 +65,17 @@ test("mapThreadStatus maps systemError and failed turn to error", () => {
   assert.equal(mapThreadStatus({ type: "idle" }, { status: "failed" }), "error");
 });
 
+test("mapThreadStatus maps terminal notLoaded turns to finished", () => {
+  assert.equal(
+    mapThreadStatus({ type: "notLoaded" }, { status: "completed", completedAt: 1780067891 }),
+    "finished",
+  );
+  assert.equal(
+    mapThreadStatus({ type: "notLoaded" }, { status: "interrupted", completedAt: 1780067891 }),
+    "finished",
+  );
+});
+
 test("mapThreadStatus maps unrecognized shape to unknown", () => {
   assert.equal(mapThreadStatus({ type: "newState" }, null), "unknown");
 });
@@ -194,4 +205,30 @@ test("normalizeThread preserves previous active evidence across notLoaded snapsh
 
   assert.equal(agent.status, "working");
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
+});
+
+test("normalizeThread stops preserving previous active evidence when current turn is terminal", () => {
+  const previous = normalizeThread(
+    thread({
+      status: { type: "notLoaded" },
+      turns: [{ status: "interrupted", startedAt: 1780067668, completedAt: null }],
+    }),
+    { nowMs: 1780067700000 },
+  );
+
+  const agent = normalizeThread(
+    thread({
+      status: { type: "notLoaded" },
+      turns: [{ status: "interrupted", startedAt: 1780067668, completedAt: 1780067891 }],
+    }),
+    { nowMs: 1780068062000, previous },
+  );
+
+  assert.equal(agent.status, "finished");
+  assert.deepEqual(agent.rawStatus, { type: "notLoaded" });
+  assert.deepEqual(agent.lastTurn, {
+    status: "interrupted",
+    startedAt: 1780067668,
+    completedAt: 1780067891,
+  });
 });
