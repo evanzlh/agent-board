@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { StatusStore } from "../../src/store/status-store.ts";
 import { createHttpApi } from "../../src/http/api.ts";
@@ -71,6 +72,25 @@ async function closeServer(server: http.Server): Promise<void> {
   });
 }
 
+async function sendRawHttpRequest(port: number, request: string): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const socket = net.connect(port, "127.0.0.1");
+    const chunks: Buffer[] = [];
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("raw HTTP request timed out"));
+    }, 1000);
+
+    socket.on("connect", () => socket.write(request));
+    socket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    socket.on("error", reject);
+    socket.on("end", () => {
+      clearTimeout(timeout);
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+  });
+}
+
 test("GET /health returns health JSON", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/health`);
@@ -130,6 +150,20 @@ test("API returns JSON errors for non-GET methods and unknown paths", async () =
     const missing = await fetch(`${baseUrl}/missing-route`);
     assert.equal(missing.status, 404);
     assert.deepEqual(await missing.json(), { error: "not_found" });
+  });
+});
+
+test("API returns JSON 400 for malformed request targets", async () => {
+  await withServer(async (baseUrl) => {
+    const port = Number(new URL(baseUrl).port);
+    const raw = await sendRawHttpRequest(
+      port,
+      "GET http://% HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+    );
+
+    assert.match(raw, /^HTTP\/1\.1 400 Bad Request/);
+    assert.match(raw, /"error":"bad_request"/);
+    assert.match(raw, /"message":"malformed_request_target"/);
   });
 });
 

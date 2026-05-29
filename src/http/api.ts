@@ -66,7 +66,12 @@ async function handleRequest(
   request: http.IncomingMessage,
   response: http.ServerResponse,
 ): Promise<void> {
-  const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  const url = parseRequestUrl(request.url ?? "/");
+  if (url === null) {
+    sendJson(response, 400, { error: "bad_request", message: "malformed_request_target" });
+    return;
+  }
+
   if (request.method !== "GET") {
     sendJson(response, 405, { error: "method_not_allowed" });
     return;
@@ -132,6 +137,14 @@ function parseFilters(url: URL): AgentFilters {
     filters.cwd = cwd;
   }
   return filters;
+}
+
+function parseRequestUrl(value: string): URL | null {
+  try {
+    return new URL(value, "http://127.0.0.1");
+  } catch {
+    return null;
+  }
 }
 
 function decodePathSegment(value: string): string | null {
