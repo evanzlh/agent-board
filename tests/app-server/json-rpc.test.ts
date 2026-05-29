@@ -9,11 +9,16 @@ function fakeProcess() {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   const events = new EventEmitter();
+  const killedSignals: string[] = [];
   return {
     stdin,
     stdout,
     stderr,
-    kill: () => true,
+    killedSignals,
+    kill: (signal?: string) => {
+      killedSignals.push(signal ?? "SIGTERM");
+      return true;
+    },
     on: events.on.bind(events),
     once: events.once.bind(events),
     emit: events.emit.bind(events),
@@ -66,4 +71,43 @@ test("JSON-RPC error rejects the matching request", async () => {
   );
 
   await assert.rejects(request, /method not found/);
+});
+
+test("process exit rejects pending and future requests", async () => {
+  const proc = fakeProcess();
+  const client = new JsonRpcStdioClient(proc);
+  const request = client.request("thread/list", {});
+  await proc.written();
+
+  proc.emit("exit", 1, null);
+
+  await assert.rejects(request, /App Server process exited/);
+  await assert.rejects(() => client.request("thread/list", {}), /App Server process exited/);
+});
+
+test("stderr and protocol errors are emitted without buffering state", async () => {
+  const proc = fakeProcess();
+  const client = new JsonRpcStdioClient(proc);
+  const stderrChunks: string[] = [];
+  const protocolErrors: unknown[] = [];
+  client.on("stderr", (chunk) => stderrChunks.push(chunk));
+  client.on("protocolError", (error) => protocolErrors.push(error));
+
+  proc.stderr.write("warning\n");
+  proc.stdout.write("{not-json}\n");
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(stderrChunks, ["warning\n"]);
+  assert.equal(protocolErrors.length, 1);
+  assert.ok(protocolErrors[0] instanceof SyntaxError);
+});
+
+test("close terminates the process with SIGTERM and rejects future requests", async () => {
+  const proc = fakeProcess();
+  const client = new JsonRpcStdioClient(proc);
+
+  client.close();
+
+  assert.deepEqual(proc.killedSignals, ["SIGTERM"]);
+  await assert.rejects(() => client.request("thread/list", {}), /JSON-RPC client is closed/);
 });

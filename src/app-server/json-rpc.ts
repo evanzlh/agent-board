@@ -23,7 +23,7 @@ export class JsonRpcStdioClient extends EventEmitter {
   readonly #pending = new Map<number, PendingRequest>();
   #nextId = 1;
   #stdoutBuffer = "";
-  #stderrBuffer = "";
+  #closedError: Error | null = null;
 
   constructor(process: JsonRpcProcess) {
     super();
@@ -31,28 +31,29 @@ export class JsonRpcStdioClient extends EventEmitter {
     process.stdout.on("data", (chunk) => this.#onStdout(chunk));
     process.stderr.on("data", (chunk) => this.#onStderr(chunk));
     process.on("exit", (code, signal) => {
-      const error = new Error(
-        `App Server process exited with code ${code ?? "null"} signal ${signal ?? "null"}`,
+      this.#closeWithError(
+        new Error(`App Server process exited with code ${code ?? "null"} signal ${signal ?? "null"}`),
       );
-      for (const pending of this.#pending.values()) {
-        pending.reject(error);
-      }
-      this.#pending.clear();
       this.emit("close", { code, signal });
     });
   }
 
   request(method: string, params: unknown): Promise<unknown> {
+    if (this.#closedError) {
+      return Promise.reject(this.#closedError);
+    }
+
     const id = this.#nextId++;
     const payload = JSON.stringify({ id, method, params });
-    this.#process.stdin.write(`${payload}\n`);
 
     return new Promise((resolve, reject) => {
       this.#pending.set(id, { resolve, reject });
+      this.#process.stdin.write(`${payload}\n`);
     });
   }
 
   close(): void {
+    this.#closeWithError(new Error("JSON-RPC client is closed"));
     this.#process.kill("SIGTERM");
   }
 
@@ -70,8 +71,18 @@ export class JsonRpcStdioClient extends EventEmitter {
   }
 
   #onStderr(chunk: Buffer | string): void {
-    this.#stderrBuffer += chunk.toString();
     this.emit("stderr", chunk.toString());
+  }
+
+  #closeWithError(error: Error): void {
+    if (this.#closedError) {
+      return;
+    }
+    this.#closedError = error;
+    for (const pending of this.#pending.values()) {
+      pending.reject(error);
+    }
+    this.#pending.clear();
   }
 
   #handleMessage(line: string): void {
