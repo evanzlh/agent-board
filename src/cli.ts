@@ -7,13 +7,19 @@ async function main(): Promise<void> {
   const daemon = await startDaemon({ config: parsed.config });
   console.log(`codex-status listening at ${daemon.url}`);
 
-  const shutdown = async (): Promise<void> => {
-    await daemon.stop();
-    process.exit(0);
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = (): void => {
+    shutdownPromise ??= daemon.stop().then(
+      () => process.exit(0),
+      (error) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      },
+    );
   };
 
-  process.once("SIGINT", () => void shutdown());
-  process.once("SIGTERM", () => void shutdown());
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 main().catch((error) => {

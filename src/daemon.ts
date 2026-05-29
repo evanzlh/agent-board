@@ -6,6 +6,7 @@ import { createHttpApi } from "./http/api.ts";
 import type { DaemonConfig } from "./config.ts";
 import type { AppServerProcess, AppServerSupervisor } from "./app-server/supervisor.ts";
 import type { InitialAppServerState } from "./app-server/client.ts";
+import type { HttpApi } from "./http/api.ts";
 
 export type DaemonHandle = {
   url: string;
@@ -40,39 +41,72 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   const appServer = await supervisor.start({
     autoStartAppServer: options.config.autoStartAppServer,
   });
-  store.setAppServerConnection({
-    connected: true,
-    autoStarted: options.config.autoStartAppServer,
-    mode: appServer.mode,
-    cliVersion: appServer.cliVersion,
-  });
+  let staleTimer: NodeJS.Timeout | null = null;
+  let api: HttpApi | null = null;
 
-  const client =
-    options.clientFactory?.(appServer) ??
-    new AppServerClient(new JsonRpcStdioClient(appServer.process as never));
+  try {
+    store.setAppServerConnection({
+      connected: true,
+      autoStarted: options.config.autoStartAppServer,
+      mode: appServer.mode,
+      cliVersion: appServer.cliVersion,
+    });
 
-  client.on("notification", (notification) => {
-    store.applyNotification(notification);
-  });
+    const client =
+      options.clientFactory?.(appServer) ??
+      new AppServerClient(new JsonRpcStdioClient(appServer.process as never));
 
-  await client.initialize();
-  const initial = await client.readInitialState();
-  store.replaceThreads(initial.threads);
+    client.on("notification", (notification) => {
+      store.applyNotification(notification);
+    });
 
-  const staleTimer = setInterval(() => store.markStaleAgents(), options.config.refreshIntervalMs);
-  const api = createHttpApi({
-    host: options.config.host,
-    port: options.config.port,
-    store,
-  });
-  await api.start();
+    await client.initialize();
+    const initial = await client.readInitialState();
+    store.replaceThreads(initial.threads);
+
+    staleTimer = setInterval(() => store.markStaleAgents(), options.config.refreshIntervalMs);
+    api = createHttpApi({
+      host: options.config.host,
+      port: options.config.port,
+      store,
+    });
+    await api.start();
+
+    return createDaemonHandle(api, staleTimer, appServer);
+  } catch (error) {
+    if (staleTimer) {
+      clearInterval(staleTimer);
+    }
+    if (api) {
+      await api.stop().catch(() => {});
+    }
+    appServer.stop();
+    throw error;
+  }
+}
+
+function createDaemonHandle(
+  api: HttpApi,
+  staleTimer: NodeJS.Timeout,
+  appServer: AppServerProcess,
+): DaemonHandle {
+  let stopped: Promise<void> | null = null;
 
   return {
     url: api.url(),
-    async stop() {
-      clearInterval(staleTimer);
-      await api.stop();
-      appServer.stop();
+    stop() {
+      stopped ??= stopDaemon(api, staleTimer, appServer);
+      return stopped;
     },
   };
+}
+
+async function stopDaemon(
+  api: HttpApi,
+  staleTimer: NodeJS.Timeout,
+  appServer: AppServerProcess,
+): Promise<void> {
+  clearInterval(staleTimer);
+  await api.stop();
+  appServer.stop();
 }
