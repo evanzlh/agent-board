@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { startDaemon } from "../src/daemon.ts";
+
+const execFileAsync = promisify(execFile);
 
 test("startDaemon wires supervisor, client, store, and http api", async () => {
   const calls: string[] = [];
@@ -74,4 +78,20 @@ test("startDaemon wires supervisor, client, store, and http api", async () => {
     "client.readInitialState",
     "appServer.stop",
   ]);
+});
+
+test("CLI without a command exits non-zero and prints Unknown command", async () => {
+  await assert.rejects(
+    () => execFileAsync(process.execPath, ["src/cli.ts"], { cwd: process.cwd() }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      const childError = error as Error & {
+        code?: number;
+        stderr?: string;
+      };
+      assert.equal(childError.code, 1);
+      assert.match(childError.stderr ?? "", /Unknown command/);
+      return true;
+    },
+  );
 });
