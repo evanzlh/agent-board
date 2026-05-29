@@ -254,6 +254,14 @@ export class StatusStore extends EventEmitter {
       startedAt: readTimestampMs(turn.startedAt) ?? previousTurn?.startedAt ?? null,
       completedAt: readTimestampMs(turn.completedAt) ?? null,
     };
+    if (isOlderTurn(nextTurn, previousTurn)) {
+      this.#setAgent({
+        ...current,
+        lastEventAt: this.#now(),
+        stale: false,
+      });
+      return;
+    }
     const rawStatus = inferRawStatusFromTurn(current.rawStatus, nextTurn);
     const nextStatus = turnPublicStatus(nextTurn, current.status);
     const updated = {
@@ -357,6 +365,19 @@ function turnPublicStatus(
 
 function readTimestampMs(value: unknown): number | null {
   return typeof value === "number" ? normalizeTimestampMs(value) : null;
+}
+
+function isOlderTurn(candidate: AgentLastTurn, current: AgentLastTurn | null): boolean {
+  if (!current) {
+    return false;
+  }
+  const candidateTime = turnTimeMs(candidate);
+  const currentTime = turnTimeMs(current);
+  return Number.isFinite(candidateTime) && Number.isFinite(currentTime) && candidateTime < currentTime;
+}
+
+function turnTimeMs(turn: AgentLastTurn): number {
+  return Math.max(turn.startedAt ?? Number.NEGATIVE_INFINITY, turn.completedAt ?? Number.NEGATIVE_INFINITY);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

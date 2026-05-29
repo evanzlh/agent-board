@@ -153,6 +153,44 @@ test("applies turn lifecycle notifications to lastTurn", () => {
   });
 });
 
+test("ignores older turn notifications that arrive after the current lastTurn", () => {
+  let now = 1780010000000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+
+  now = 1780010300000;
+  store.applyNotification({
+    method: "turn/completed",
+    params: {
+      threadId: "one",
+      turn: { status: "completed", startedAt: 1780010200, completedAt: 1780010300 },
+    },
+  });
+  assert.deepEqual(store.getAgent("one")?.lastTurn, {
+    status: "completed",
+    startedAt: 1780010200000,
+    completedAt: 1780010300000,
+  });
+
+  now = 1780010400000;
+  store.applyNotification({
+    method: "turn/completed",
+    params: {
+      threadId: "one",
+      turn: { status: "interrupted", startedAt: 1780010100, completedAt: 1780010150 },
+    },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "finished");
+  assert.deepEqual(agent?.lastTurn, {
+    status: "completed",
+    startedAt: 1780010200000,
+    completedAt: 1780010300000,
+  });
+  assert.equal(agent?.lastEventAt, 1780010400000);
+});
+
 test("completed turn clears stale waiting approval evidence", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });

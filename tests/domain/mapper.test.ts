@@ -184,6 +184,26 @@ test("normalizeThread converts App Server second timestamps to milliseconds", ()
   });
 });
 
+test("normalizeThread uses the most recent turn by timestamp instead of array order", () => {
+  const agent = normalizeThread(
+    thread({
+      status: { type: "notLoaded" },
+      turns: [
+        { status: "completed", startedAt: 1780010200, completedAt: 1780010300 },
+        { status: "interrupted", startedAt: 1780010100, completedAt: 1780010150 },
+      ],
+    }),
+    { nowMs: 1780010400000 },
+  );
+
+  assert.equal(agent.status, "finished");
+  assert.deepEqual(agent.lastTurn, {
+    status: "completed",
+    startedAt: 1780010200000,
+    completedAt: 1780010300000,
+  });
+});
+
 test("normalizeThread uses in-progress turn as active evidence for notLoaded threads", () => {
   const agent = normalizeThread(
     thread({

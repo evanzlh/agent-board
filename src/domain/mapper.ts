@@ -123,7 +123,7 @@ export function deriveDisplayName(thread: AppServerThread): string {
 
 export function normalizeThread(thread: AppServerThread, options: NormalizeOptions): AgentStatus {
   const previous = options.previous ?? null;
-  const currentLastTurn = normalizeLastTurn(thread.turns.at(-1) ?? null);
+  const currentLastTurn = normalizeLastTurn(selectLatestTurn(thread.turns));
   const shouldPreservePrevious =
     currentLastTurn === null && shouldPreservePreviousEvidence(thread.status, previous);
   const lastTurn =
@@ -171,6 +171,27 @@ function normalizeLastTurn(turn: AppServerLastTurn | null): AgentLastTurn | null
     startedAt: typeof turn.startedAt === "number" ? normalizeTimestampMs(turn.startedAt) : null,
     completedAt: typeof turn.completedAt === "number" ? normalizeTimestampMs(turn.completedAt) : null,
   };
+}
+
+function selectLatestTurn(turns: AppServerLastTurn[]): AppServerLastTurn | null {
+  let latest: AppServerLastTurn | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+
+  for (const turn of turns) {
+    const time = appServerTurnTimeMs(turn);
+    if (latest === null || time >= latestTime) {
+      latest = turn;
+      latestTime = time;
+    }
+  }
+
+  return latest;
+}
+
+function appServerTurnTimeMs(turn: AppServerLastTurn): number {
+  const startedAt = typeof turn.startedAt === "number" ? normalizeTimestampMs(turn.startedAt) : null;
+  const completedAt = typeof turn.completedAt === "number" ? normalizeTimestampMs(turn.completedAt) : null;
+  return Math.max(startedAt ?? Number.NEGATIVE_INFINITY, completedAt ?? Number.NEGATIVE_INFINITY);
 }
 
 function isWaitingStatus(status: AgentPublicStatus): boolean {
