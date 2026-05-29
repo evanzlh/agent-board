@@ -220,7 +220,7 @@ export class StatusStore extends EventEmitter {
     if (!current) {
       return;
     }
-    const nextStatus = mapThreadStatus(params.status, current.lastTurn);
+    const nextStatus = mapThreadStatus(params.status, null);
     const waitingSince =
       nextStatus === "waiting_approval" || nextStatus === "waiting_input"
         ? current.status === nextStatus
@@ -254,11 +254,18 @@ export class StatusStore extends EventEmitter {
       completedAt: readNumber(turn.completedAt) ?? null,
     };
     const rawStatus = inferRawStatusFromTurn(current.rawStatus, nextTurn);
+    const nextStatus = turnPublicStatus(nextTurn, current.status);
     const updated = {
       ...current,
       lastTurn: nextTurn,
-      status: mapThreadStatus(rawStatus, nextTurn),
+      status: nextStatus,
       rawStatus,
+      waitingSince:
+        nextStatus === "waiting_approval" || nextStatus === "waiting_input"
+          ? current.status === nextStatus
+            ? current.waitingSince
+            : this.#now()
+          : null,
       lastEventAt: this.#now(),
       stale: false,
     } satisfies AgentStatus;
@@ -329,6 +336,22 @@ function readTurnStatus(value: unknown): AgentLastTurn["status"] {
   return value === "completed" || value === "interrupted" || value === "failed" || value === "inProgress"
     ? value
     : "unknown";
+}
+
+function turnPublicStatus(
+  turn: AgentLastTurn,
+  currentStatus: AgentPublicStatus,
+): AgentPublicStatus {
+  if (turn.status === "failed") {
+    return "error";
+  }
+  if (turn.status === "completed" || (turn.status === "interrupted" && turn.completedAt !== null)) {
+    return "finished";
+  }
+  if (turn.status === "inProgress" || (turn.status === "interrupted" && turn.completedAt === null)) {
+    return "working";
+  }
+  return currentStatus;
 }
 
 function readNumber(value: unknown): number | null {

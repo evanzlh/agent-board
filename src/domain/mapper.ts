@@ -39,6 +39,7 @@ export function mapThreadStatus(
     if (flags.includes("waitingOnUserInput")) {
       return "waiting_input";
     }
+    return "working";
   }
 
   if (hasTerminalTurnEvidence(lastTurn) && status.type !== "idle") {
@@ -55,10 +56,6 @@ export function mapThreadStatus(
 
   if (status.type === "notLoaded") {
     return "unknown";
-  }
-
-  if (status.type === "active") {
-    return "working";
   }
 
   return "unknown";
@@ -178,8 +175,9 @@ function shouldPreservePreviousEvidence(
 
 function hasLiveEvidence(agent: AgentStatus): boolean {
   return (
-    agent.status !== "unknown" &&
-    agent.status !== "idle" &&
+    (agent.status === "working" ||
+      agent.status === "waiting_approval" ||
+      agent.status === "waiting_input") &&
     !isNotLoadedThreadStatus(agent.rawStatus)
   );
 }

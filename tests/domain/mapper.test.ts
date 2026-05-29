@@ -60,6 +60,13 @@ test("mapThreadStatus maps waiting input", () => {
   );
 });
 
+test("mapThreadStatus treats current active status as stronger than terminal turn evidence", () => {
+  assert.equal(
+    mapThreadStatus({ type: "active", activeFlags: [] }, { status: "completed", completedAt: 1780067891 }),
+    "working",
+  );
+});
+
 test("mapThreadStatus maps systemError and failed turn to error", () => {
   assert.equal(mapThreadStatus({ type: "systemError" }, null), "error");
   assert.equal(mapThreadStatus({ type: "idle" }, { status: "failed" }), "error");
@@ -205,6 +212,31 @@ test("normalizeThread preserves previous active evidence across notLoaded snapsh
 
   assert.equal(agent.status, "working");
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
+});
+
+test("normalizeThread does not preserve previous terminal evidence as live evidence", () => {
+  const previous = {
+    ...normalizeThread(
+      thread({ status: { type: "active", activeFlags: [] } }),
+      { nowMs: 1780067900000 },
+    ),
+    status: "finished" as const,
+    rawStatus: { type: "active", activeFlags: [] },
+    lastTurn: {
+      status: "completed" as const,
+      startedAt: 1780067668,
+      completedAt: 1780067891,
+    },
+  };
+
+  const agent = normalizeThread(
+    thread({ status: { type: "notLoaded" }, turns: [] }),
+    { nowMs: 1780068062000, previous },
+  );
+
+  assert.equal(agent.status, "unknown");
+  assert.deepEqual(agent.rawStatus, { type: "notLoaded" });
+  assert.equal(agent.lastTurn, null);
 });
 
 test("normalizeThread stops preserving previous active evidence when current turn is terminal", () => {

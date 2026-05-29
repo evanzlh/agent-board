@@ -153,6 +153,22 @@ test("applies turn lifecycle notifications to lastTurn", () => {
   });
 });
 
+test("completed turn clears stale waiting approval evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: ["waitingOnApproval"] })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/completed",
+    params: { threadId: "one", turn: { status: "completed", completedAt: 2000 } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "finished");
+  assert.equal(agent?.waitingSince, null);
+});
+
 test("failed turn followed by in-progress turn moves public status to working", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
@@ -174,6 +190,50 @@ test("failed turn followed by in-progress turn moves public status to working", 
   const agent = store.getAgent("one");
   assert.equal(agent?.lastTurn?.status, "inProgress");
   assert.equal(agent?.status, "working");
+});
+
+test("fresh idle status overrides stale in-progress turn evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "notLoaded" })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/started",
+    params: { threadId: "one", turn: { status: "inProgress", startedAt: 2000 } },
+  });
+
+  now = 3000;
+  store.applyNotification({
+    method: "thread/status/changed",
+    params: { threadId: "one", status: { type: "idle" } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "idle");
+  assert.deepEqual(agent?.rawStatus, { type: "idle" });
+});
+
+test("fresh active status overrides stale failed turn evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/completed",
+    params: { threadId: "one", turn: { status: "failed", completedAt: 2000 } },
+  });
+
+  now = 3000;
+  store.applyNotification({
+    method: "thread/status/changed",
+    params: { threadId: "one", status: { type: "active", activeFlags: [] } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
 });
 
 test("idle agent receiving in-progress turn becomes working", () => {
