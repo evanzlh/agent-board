@@ -7,7 +7,7 @@
     "codex-status": "src/cli.ts"
   },
   "scripts": {
-    "test": "node --test tests/**/*.test.ts",
+    "test": "node --test \"tests/**/*.test.ts\"",
     "start": "node src/cli.ts daemon",
     "smoke:real": "node scripts/smoke-real-app-server.ts"
   },
