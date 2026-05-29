@@ -27,7 +27,11 @@ export function formatTimestamp(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return EMPTY_VALUE;
   }
-  return new Date(value).toLocaleString();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return EMPTY_VALUE;
+  }
+  return date.toLocaleString();
 }
 
 export function valueOrEmpty(value) {

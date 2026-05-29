@@ -83,6 +83,7 @@ test("filterAgents treats all and empty filters as no filter", () => {
 test("formatTimestamp renders numbers and falls back for nullish values", () => {
   assert.equal(formatTimestamp(null), EMPTY_VALUE);
   assert.equal(formatTimestamp(undefined), EMPTY_VALUE);
+  assert.equal(formatTimestamp(9e99), EMPTY_VALUE);
   assert.match(formatTimestamp(1780010100000), /2026/);
 });
 
