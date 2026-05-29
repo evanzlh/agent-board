@@ -162,3 +162,36 @@ test("normalizeThread uses in-progress turn as active evidence for notLoaded thr
     completedAt: null,
   });
 });
+
+test("normalizeThread uses unresolved interrupted turn as active evidence for notLoaded threads", () => {
+  const agent = normalizeThread(
+    thread({
+      status: { type: "notLoaded" },
+      turns: [{ status: "interrupted", startedAt: 1780067247, completedAt: null }],
+    }),
+    { nowMs: 1780067292000 },
+  );
+
+  assert.equal(agent.status, "working");
+  assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
+  assert.deepEqual(agent.lastTurn, {
+    status: "interrupted",
+    startedAt: 1780067247,
+    completedAt: null,
+  });
+});
+
+test("normalizeThread preserves previous active evidence across notLoaded snapshots", () => {
+  const previous = normalizeThread(
+    thread({ status: { type: "active", activeFlags: [] } }),
+    { nowMs: 1780010200000 },
+  );
+
+  const agent = normalizeThread(
+    thread({ status: { type: "notLoaded" } }),
+    { nowMs: 1780010300000, previous },
+  );
+
+  assert.equal(agent.status, "working");
+  assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
+});

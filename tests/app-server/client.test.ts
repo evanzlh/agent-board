@@ -152,6 +152,52 @@ test("client hydrates loaded threads with live thread details", async () => {
   });
 });
 
+test("client hydrates recent notLoaded threads so turn evidence is visible", async () => {
+  const rpc = new FakeRpc();
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "working-not-loaded",
+        status: { type: "notLoaded" },
+        updatedAt: 1780067292,
+        turns: [],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "working-not-loaded",
+      status: { type: "notLoaded" },
+      updatedAt: 1780067292,
+      turns: [{ status: "interrupted", startedAt: 1780067247, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc);
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads, [
+    {
+      id: "working-not-loaded",
+      status: { type: "notLoaded" },
+      updatedAt: 1780067292,
+      turns: [{ status: "interrupted", startedAt: 1780067247, completedAt: null }],
+    },
+  ]);
+  assert.deepEqual(state.loadedThreadIds, []);
+  assert.deepEqual(rpc.requests.map((request) => request.method), [
+    "thread/list",
+    "thread/loaded/list",
+    "thread/read",
+  ]);
+  assert.deepEqual(rpc.requests.at(-1)?.params, {
+    threadId: "working-not-loaded",
+    includeTurns: true,
+  });
+});
+
 test("client rejects repeated pagination cursors", async () => {
   const rpc = new FakeRpc();
   rpc.respond(

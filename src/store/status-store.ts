@@ -1,6 +1,11 @@
 import { EventEmitter } from "node:events";
 import { VERSION } from "../version.ts";
-import { inferRawStatusFromTurn, mapThreadStatus, normalizeThread } from "../domain/mapper.ts";
+import {
+  inferRawStatusFromActivity,
+  inferRawStatusFromTurn,
+  mapThreadStatus,
+  normalizeThread,
+} from "../domain/mapper.ts";
 import type {
   AgentKind,
   AgentLastTurn,
@@ -129,11 +134,12 @@ export class StatusStore extends EventEmitter {
       return;
     }
 
-    if (
-      notification.method === "item/started" ||
-      notification.method === "item/completed" ||
-      notification.method === "serverRequest/resolved"
-    ) {
+    if (notification.method === "item/started") {
+      this.#touchAgent(notification.params, { activeEvidence: true });
+      return;
+    }
+
+    if (notification.method === "item/completed" || notification.method === "serverRequest/resolved") {
       this.#touchAgent(notification.params);
     }
   }
@@ -246,18 +252,19 @@ export class StatusStore extends EventEmitter {
       startedAt: readNumber(turn.startedAt) ?? previousTurn?.startedAt ?? null,
       completedAt: readNumber(turn.completedAt) ?? null,
     };
+    const rawStatus = inferRawStatusFromTurn(current.rawStatus, nextTurn);
     const updated = {
       ...current,
       lastTurn: nextTurn,
-      status: turnPublicStatus(nextTurn.status, current.status),
-      rawStatus: inferRawStatusFromTurn(current.rawStatus, nextTurn),
+      status: turnPublicStatus(nextTurn, current.status),
+      rawStatus,
       lastEventAt: this.#now(),
       stale: false,
     } satisfies AgentStatus;
     this.#setAgent(updated);
   }
 
-  #touchAgent(params: unknown): void {
+  #touchAgent(params: unknown, options: { activeEvidence?: boolean } = {}): void {
     if (!isObject(params) || typeof params.threadId !== "string") {
       return;
     }
@@ -265,8 +272,13 @@ export class StatusStore extends EventEmitter {
     if (!current) {
       return;
     }
+    const rawStatus = options.activeEvidence
+      ? inferRawStatusFromActivity(current.rawStatus)
+      : current.rawStatus;
     this.#setAgent({
       ...current,
+      status: options.activeEvidence ? mapThreadStatus(rawStatus, current.lastTurn) : current.status,
+      rawStatus,
       lastEventAt: this.#now(),
       stale: false,
     });
@@ -317,13 +329,13 @@ function readTurnStatus(value: unknown): AgentLastTurn["status"] {
 }
 
 function turnPublicStatus(
-  turnStatus: AgentLastTurn["status"],
+  turn: AgentLastTurn,
   currentStatus: AgentPublicStatus,
 ): AgentPublicStatus {
-  if (turnStatus === "failed") {
+  if (turn.status === "failed") {
     return "error";
   }
-  if (turnStatus === "inProgress") {
+  if (turn.status === "inProgress" || (turn.status === "interrupted" && turn.completedAt === null)) {
     return "working";
   }
   return currentStatus;

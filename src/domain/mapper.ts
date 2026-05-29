@@ -11,10 +11,14 @@ import type {
 
 export function mapThreadStatus(
   status: AppServerThreadStatus | unknown,
-  lastTurn: Pick<AgentLastTurn, "status"> | null,
+  lastTurn: Pick<AgentLastTurn, "status" | "completedAt"> | null,
 ): AgentPublicStatus {
   if (lastTurn?.status === "failed") {
     return "error";
+  }
+
+  if (hasActiveTurnEvidence(lastTurn) && isInactiveThreadStatus(status)) {
+    return "working";
   }
 
   if (!isObject(status) || typeof status.type !== "string") {
@@ -49,10 +53,19 @@ export function mapThreadStatus(
 
 export function inferRawStatusFromTurn(
   status: AppServerThreadStatus | unknown,
-  lastTurn: Pick<AgentLastTurn, "status"> | null,
+  lastTurn: Pick<AgentLastTurn, "status" | "completedAt"> | null,
 ): AppServerThreadStatus | unknown {
-  if (lastTurn?.status === "inProgress" && isInactiveThreadStatus(status)) {
-    return { type: "active", activeFlags: [] };
+  if (hasActiveTurnEvidence(lastTurn) && isInactiveThreadStatus(status)) {
+    return activeRawStatus();
+  }
+  return status;
+}
+
+export function inferRawStatusFromActivity(
+  status: AppServerThreadStatus | unknown,
+): AppServerThreadStatus | unknown {
+  if (isInactiveThreadStatus(status)) {
+    return activeRawStatus();
   }
   return status;
 }
@@ -89,8 +102,12 @@ export function deriveDisplayName(thread: AppServerThread): string {
 
 export function normalizeThread(thread: AppServerThread, options: NormalizeOptions): AgentStatus {
   const previous = options.previous ?? null;
-  const lastTurn = normalizeLastTurn(thread.turns.at(-1) ?? null);
-  const rawStatus = inferRawStatusFromTurn(thread.status, lastTurn);
+  const shouldPreservePrevious = shouldPreservePreviousEvidence(thread.status, previous);
+  const lastTurn =
+    normalizeLastTurn(thread.turns.at(-1) ?? null) ??
+    (shouldPreservePrevious ? previous.lastTurn : null);
+  const statusInput = shouldPreservePrevious ? previous.rawStatus : thread.status;
+  const rawStatus = inferRawStatusFromTurn(statusInput, lastTurn);
   const publicStatus = mapThreadStatus(rawStatus, lastTurn);
   const waitingSince = isWaitingStatus(publicStatus)
     ? previous && previous.status === publicStatus
@@ -138,11 +155,43 @@ function isWaitingStatus(status: AgentPublicStatus): boolean {
   return status === "waiting_approval" || status === "waiting_input";
 }
 
+function shouldPreservePreviousEvidence(
+  status: AppServerThreadStatus | unknown,
+  previous: AgentStatus | null,
+): previous is AgentStatus {
+  return isNotLoadedThreadStatus(status) && previous !== null && hasLiveEvidence(previous);
+}
+
+function hasLiveEvidence(agent: AgentStatus): boolean {
+  return (
+    agent.status !== "unknown" &&
+    agent.status !== "idle" &&
+    !isNotLoadedThreadStatus(agent.rawStatus)
+  );
+}
+
 function isInactiveThreadStatus(status: unknown): boolean {
   if (!isObject(status) || typeof status.type !== "string") {
     return true;
   }
   return status.type === "notLoaded" || status.type === "idle";
+}
+
+function hasActiveTurnEvidence(
+  turn: Pick<AgentLastTurn, "status" | "completedAt"> | null,
+): boolean {
+  if (!turn) {
+    return false;
+  }
+  return turn.status === "inProgress" || (turn.status === "interrupted" && turn.completedAt === null);
+}
+
+function isNotLoadedThreadStatus(status: unknown): boolean {
+  return isObject(status) && status.type === "notLoaded";
+}
+
+function activeRawStatus(): AppServerThreadStatus {
+  return { type: "active", activeFlags: [] };
 }
 
 function getSubAgentSource(source: unknown): unknown {

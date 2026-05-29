@@ -217,6 +217,6 @@ scripts/           Real App Server smoke test
 | HTTP port is busy | Start with `--port <free-port>` or `--port 0` for an ephemeral port. |
 | `/health` shows `connected: false` | Inspect `appServer.lastError`; the daemon will retry on `--refresh-interval-ms`. |
 | Agents are shown as `stale` | App Server disconnected and no fresh events arrived before `--stale-after-ms`. |
-| Agent `rawStatus` is `notLoaded` | App Server has metadata for the thread but no live runtime loaded, and no in-progress turn or fresh status notification has been observed yet. |
+| Agent `rawStatus` is `notLoaded` | App Server has metadata for the thread but no live runtime loaded, and no in-progress turn, item activity, previous live evidence, or fresh status notification has been observed yet. |
 | No agents appear | Start or resume Codex work in the same local environment, then refresh `/ui` or query `/status`. |
 | `npm run smoke:real` fails | Verify the installed Codex CLI supports `codex app-server` commands. |

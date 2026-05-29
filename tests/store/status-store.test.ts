@@ -203,6 +203,33 @@ test("turn started replaces notLoaded rawStatus with active evidence", () => {
   assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
 });
 
+test("item started treats notLoaded thread metadata as active evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "notLoaded" })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "item/started",
+    params: { threadId: "one", item: { type: "agentMessage" }, startedAtMs: 2000 },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
+});
+
+test("notLoaded refresh preserves previous active evidence", () => {
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => 1000 });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+
+  store.replaceThreads([thread("one", { type: "notLoaded" })]);
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
+});
+
 test("applies thread status changed notifications and emits agent.updated", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 5000, now: () => now });

@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import type { AppServerThread } from "../domain/types.ts";
 
+const NOT_LOADED_HYDRATION_LIMIT = 25;
+
 export type RpcLike = EventEmitter & {
   request: (method: string, params: unknown) => Promise<unknown>;
 };
@@ -42,8 +44,9 @@ export class AppServerClient extends EventEmitter {
   async readInitialState(): Promise<InitialAppServerState> {
     const threads = await this.#readAllThreads();
     const loadedThreadIds = await this.#readAllLoadedThreadIds();
-    const loadedThreads = await this.#readLoadedThreads(loadedThreadIds);
-    return { threads: mergeLoadedThreads(threads, loadedThreads), loadedThreadIds };
+    const threadIdsToHydrate = selectThreadIdsToHydrate(threads, loadedThreadIds);
+    const hydratedThreads = await this.#readThreads(threadIdsToHydrate);
+    return { threads: mergeHydratedThreads(threads, hydratedThreads), loadedThreadIds };
   }
 
   async #readAllThreads(): Promise<AppServerThread[]> {
@@ -95,7 +98,7 @@ export class AppServerClient extends EventEmitter {
     return all;
   }
 
-  async #readLoadedThreads(threadIds: string[]): Promise<AppServerThread[]> {
+  async #readThreads(threadIds: string[]): Promise<AppServerThread[]> {
     const threads: AppServerThread[] = [];
     for (const threadId of threadIds) {
       const response = (await this.#rpc.request("thread/read", {
@@ -110,22 +113,44 @@ export class AppServerClient extends EventEmitter {
   }
 }
 
-function mergeLoadedThreads(
+function selectThreadIdsToHydrate(threads: AppServerThread[], loadedThreadIds: string[]): string[] {
+  const threadIds = new Set(loadedThreadIds);
+  let notLoadedCount = 0;
+
+  for (const thread of threads) {
+    if (notLoadedCount >= NOT_LOADED_HYDRATION_LIMIT) {
+      break;
+    }
+    if (!isNotLoadedThread(thread) || threadIds.has(thread.id)) {
+      continue;
+    }
+    threadIds.add(thread.id);
+    notLoadedCount += 1;
+  }
+
+  return [...threadIds];
+}
+
+function isNotLoadedThread(thread: AppServerThread): boolean {
+  return isObject(thread.status) && thread.status.type === "notLoaded";
+}
+
+function mergeHydratedThreads(
   threads: AppServerThread[],
-  loadedThreads: AppServerThread[],
+  hydratedThreads: AppServerThread[],
 ): AppServerThread[] {
-  if (loadedThreads.length === 0) {
+  if (hydratedThreads.length === 0) {
     return threads;
   }
 
-  const loadedById = new Map(loadedThreads.map((thread) => [thread.id, thread]));
+  const loadedById = new Map(hydratedThreads.map((thread) => [thread.id, thread]));
   const seen = new Set<string>();
   const merged = threads.map((thread) => {
     seen.add(thread.id);
     return loadedById.get(thread.id) ?? thread;
   });
 
-  for (const thread of loadedThreads) {
+  for (const thread of hydratedThreads) {
     if (!seen.has(thread.id)) {
       merged.push(thread);
     }
@@ -143,4 +168,8 @@ function readNextCursor(method: string, cursor: string | null, seenCursors: Set<
   }
   seenCursors.add(cursor);
   return cursor;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
