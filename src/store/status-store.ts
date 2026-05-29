@@ -99,9 +99,8 @@ export class StatusStore extends EventEmitter {
       next.set(thread.id, normalizeThread(thread, { nowMs, previous: this.#agents.get(thread.id) }));
     }
     this.#agents.clear();
-    for (const [id, agent] of next) {
-      this.#agents.set(id, agent);
-      this.#emitAgentUpdated(agent);
+    for (const agent of next.values()) {
+      this.#setAgent(agent);
     }
   }
 
@@ -110,8 +109,7 @@ export class StatusStore extends EventEmitter {
       nowMs: this.#now(),
       previous: this.#agents.get(thread.id),
     });
-    this.#agents.set(agent.id, agent);
-    this.#emitAgentUpdated(agent);
+    this.#setAgent(agent);
     return agent;
   }
 
@@ -188,9 +186,9 @@ export class StatusStore extends EventEmitter {
       return;
     }
     const nowMs = this.#now();
-    for (const [id, agent] of this.#agents) {
+    for (const agent of this.#agents.values()) {
       if (!agent.stale && nowMs - agent.lastEventAt > this.#staleAfterMs) {
-        this.#agents.set(id, { ...agent, stale: true });
+        this.#setAgent({ ...agent, stale: true });
       }
     }
   }
@@ -218,8 +216,7 @@ export class StatusStore extends EventEmitter {
       lastEventAt: this.#now(),
       stale: false,
     };
-    this.#agents.set(updated.id, updated);
-    this.#emitAgentUpdated(updated);
+    this.#setAgent(updated);
   }
 
   #applyTurnNotification(params: unknown): void {
@@ -240,12 +237,11 @@ export class StatusStore extends EventEmitter {
     const updated = {
       ...current,
       lastTurn: nextTurn,
-      status: nextTurn.status === "failed" ? "error" : current.status,
+      status: turnPublicStatus(nextTurn.status, current.status),
       lastEventAt: this.#now(),
       stale: false,
     } satisfies AgentStatus;
-    this.#agents.set(updated.id, updated);
-    this.#emitAgentUpdated(updated);
+    this.#setAgent(updated);
   }
 
   #touchAgent(params: unknown): void {
@@ -256,11 +252,16 @@ export class StatusStore extends EventEmitter {
     if (!current) {
       return;
     }
-    this.#agents.set(current.id, {
+    this.#setAgent({
       ...current,
       lastEventAt: this.#now(),
       stale: false,
     });
+  }
+
+  #setAgent(agent: AgentStatus): void {
+    this.#agents.set(agent.id, agent);
+    this.#emitAgentUpdated(agent);
   }
 
   #emitAgentUpdated(agent: AgentStatus): void {
@@ -300,6 +301,19 @@ function readTurnStatus(value: unknown): AgentLastTurn["status"] {
   return value === "completed" || value === "interrupted" || value === "failed" || value === "inProgress"
     ? value
     : "unknown";
+}
+
+function turnPublicStatus(
+  turnStatus: AgentLastTurn["status"],
+  currentStatus: AgentPublicStatus,
+): AgentPublicStatus {
+  if (turnStatus === "failed") {
+    return "error";
+  }
+  if (turnStatus === "inProgress") {
+    return "working";
+  }
+  return currentStatus;
 }
 
 function readNumber(value: unknown): number | null {

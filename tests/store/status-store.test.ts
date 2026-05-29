@@ -97,6 +97,29 @@ test("marks stale agents when disconnected beyond staleAfterMs", () => {
   assert.equal(store.getHealth().appServer.lastError, "lost connection");
 });
 
+test("markStaleAgents emits agent.updated when an agent becomes stale", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 5000, now: () => now });
+  const events: unknown[] = [];
+
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+  store.on("event", (event) => events.push(event));
+  store.setAppServerConnection({ connected: false });
+  now = 7001;
+
+  store.markStaleAgents();
+
+  assert.equal(store.getAgent("one")?.stale, true);
+  assert.deepEqual(events, [
+    {
+      type: "agent.updated",
+      agentId: "one",
+      status: "working",
+      at: 7001,
+    },
+  ]);
+});
+
 test("applies turn lifecycle notifications to lastTurn", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
@@ -123,6 +146,45 @@ test("applies turn lifecycle notifications to lastTurn", () => {
     startedAt: 2000,
     completedAt: 3000,
   });
+});
+
+test("failed turn followed by in-progress turn moves public status to working", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/completed",
+    params: { threadId: "one", turn: { status: "failed", completedAt: 2000 } },
+  });
+  assert.equal(store.getAgent("one")?.status, "error");
+
+  now = 3000;
+  store.applyNotification({
+    method: "turn/started",
+    params: { threadId: "one", turn: { status: "inProgress", startedAt: 3000 } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.lastTurn?.status, "inProgress");
+  assert.equal(agent?.status, "working");
+});
+
+test("idle agent receiving in-progress turn becomes working", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "idle" })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/started",
+    params: { threadId: "one", turn: { status: "inProgress", startedAt: 2000 } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.lastTurn?.status, "inProgress");
+  assert.equal(agent?.status, "working");
 });
 
 test("applies thread status changed notifications and emits agent.updated", () => {
@@ -160,7 +222,9 @@ test("applies thread status changed notifications and emits agent.updated", () =
 test("applies item lifecycle notifications by refreshing lastEventAt", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  const events: unknown[] = [];
   store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+  store.on("event", (event) => events.push(event));
 
   now = 4000;
   store.applyNotification({ method: "item/started", params: { threadId: "one" } });
@@ -169,6 +233,12 @@ test("applies item lifecycle notifications by refreshing lastEventAt", () => {
   now = 5000;
   store.applyNotification({ method: "item/completed", params: { threadId: "one" } });
   assert.equal(store.getAgent("one")?.lastEventAt, 5000);
+  assert.deepEqual(events.at(-1), {
+    type: "agent.updated",
+    agentId: "one",
+    status: "working",
+    at: 5000,
+  });
 
   now = 6000;
   store.applyNotification({ method: "serverRequest/resolved", params: { threadId: "one" } });
