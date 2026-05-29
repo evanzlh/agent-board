@@ -24,6 +24,7 @@ const state = {
   isLoading: false,
   lastLoadedAt: null,
   lastError: null,
+  lastErrorAt: null,
   generatedAt: null,
 };
 
@@ -90,8 +91,10 @@ async function loadSnapshot() {
     ]);
 
     const errors = [];
+    let succeeded = false;
     if (healthResult.status === "fulfilled") {
       state.health = healthResult.value;
+      succeeded = true;
     } else {
       errors.push(`health: ${readError(healthResult.reason)}`);
     }
@@ -100,6 +103,7 @@ async function loadSnapshot() {
       state.summary = statusResult.value.summary ?? null;
       state.agents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
       state.generatedAt = statusResult.value.generatedAt ?? null;
+      succeeded = true;
       if (state.expandedAgentId && !state.agents.some((agent) => agent.id === state.expandedAgentId)) {
         state.expandedAgentId = null;
       }
@@ -107,8 +111,17 @@ async function loadSnapshot() {
       errors.push(`status: ${readError(statusResult.reason)}`);
     }
 
-    state.lastLoadedAt = Date.now();
-    state.lastError = errors.length > 0 ? errors.join("; ") : null;
+    const completedAt = Date.now();
+    if (succeeded) {
+      state.lastLoadedAt = completedAt;
+    }
+    if (errors.length > 0) {
+      state.lastError = errors.join("; ");
+      state.lastErrorAt = completedAt;
+    } else {
+      state.lastError = null;
+      state.lastErrorAt = null;
+    }
   } finally {
     state.isLoading = false;
     elements.refreshButton.disabled = false;
@@ -155,7 +168,11 @@ function renderHealth() {
 
 function renderError() {
   const healthError = state.health?.appServer?.lastError;
-  const errors = [state.lastError, healthError].filter(Boolean);
+  const requestError =
+    state.lastError && state.lastErrorAt
+      ? `${state.lastError} at ${formatTimestamp(state.lastErrorAt)}`
+      : state.lastError;
+  const errors = [requestError, healthError].filter(Boolean);
   if (errors.length === 0) {
     elements.errorBanner.hidden = true;
     elements.errorBanner.textContent = "";
@@ -225,13 +242,16 @@ function renderAgentRow(agent) {
   if (agent.id === state.expandedAgentId) {
     row.classList.add("is-expanded");
   }
+  if (agent.stale) {
+    row.classList.add("is-stale");
+  }
   row.addEventListener("click", () => {
     state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
     renderTable();
   });
 
   row.append(
-    cell(renderStatus(agent.status)),
+    cell(renderStatus(agent.status, agent.stale)),
     textCell(agent.kind),
     textCell(agent.displayName),
     textCell(compactJson(agent.rawStatus), "json-inline"),
@@ -257,12 +277,21 @@ function renderDetailRow(agent) {
   return row;
 }
 
-function renderStatus(status) {
+function renderStatus(status, stale = false) {
+  const wrap = document.createElement("span");
+  wrap.className = "status-stack";
   const pill = document.createElement("span");
   pill.className = "status-pill";
   pill.dataset.status = valueOrEmpty(status);
   pill.textContent = valueOrEmpty(status);
-  return pill;
+  wrap.append(pill);
+  if (stale) {
+    const staleBadge = document.createElement("span");
+    staleBadge.className = "stale-badge";
+    staleBadge.textContent = "stale";
+    wrap.append(staleBadge);
+  }
+  return wrap;
 }
 
 function textCell(value, extraClass = "") {

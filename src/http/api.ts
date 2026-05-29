@@ -8,6 +8,7 @@ export type HttpApiOptions = {
   host: string;
   port: number;
   store: StatusStore;
+  uiAssets?: ReadonlyMap<string, UiAsset>;
 };
 
 export type HttpApi = {
@@ -16,7 +17,7 @@ export type HttpApi = {
   url: () => string;
 };
 
-type UiAsset = {
+export type UiAsset = {
   path: string;
   contentType: string;
 };
@@ -39,8 +40,9 @@ const UI_ASSETS = new Map<string, UiAsset>([
 
 export function createHttpApi(options: HttpApiOptions): HttpApi {
   const sseClients = new Set<http.ServerResponse>();
+  const uiAssets = options.uiAssets ?? UI_ASSETS;
   const server = http.createServer((request, response) => {
-    void handleRequest(options.store, sseClients, request, response);
+    void handleRequest(options.store, uiAssets, sseClients, request, response);
   });
 
   const onStoreEvent = (event: StoreEvent): void => {
@@ -85,6 +87,7 @@ export function createHttpApi(options: HttpApiOptions): HttpApi {
 
 async function handleRequest(
   store: StatusStore,
+  uiAssets: ReadonlyMap<string, UiAsset>,
   sseClients: Set<http.ServerResponse>,
   request: http.IncomingMessage,
   response: http.ServerResponse,
@@ -101,7 +104,7 @@ async function handleRequest(
   }
 
   const rawPathname = request.url?.split("?", 1)[0] ?? "/";
-  if (await sendUiAsset(rawPathname, response)) {
+  if (await sendUiAsset(rawPathname, uiAssets, response)) {
     return;
   }
 
@@ -155,8 +158,12 @@ async function handleRequest(
   sendJson(response, 404, { error: "not_found" });
 }
 
-async function sendUiAsset(pathname: string, response: http.ServerResponse): Promise<boolean> {
-  const asset = UI_ASSETS.get(pathname);
+async function sendUiAsset(
+  pathname: string,
+  uiAssets: ReadonlyMap<string, UiAsset>,
+  response: http.ServerResponse,
+): Promise<boolean> {
+  const asset = uiAssets.get(pathname);
   if (!asset) {
     return false;
   }

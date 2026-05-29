@@ -1,4 +1,3 @@
-import { chmod, stat } from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -6,10 +5,12 @@ import net from "node:net";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { StatusStore } from "../../src/store/status-store.ts";
-import { createHttpApi } from "../../src/http/api.ts";
+import { createHttpApi, type HttpApiOptions } from "../../src/http/api.ts";
 import type { AppServerThread } from "../../src/domain/types.ts";
 
-const UI_APP_PATH = fileURLToPath(new URL("../../src/ui/app.js", import.meta.url));
+const MISSING_UI_ASSET_PATH = fileURLToPath(
+  new URL("../../src/ui/__missing_asset_for_test__.js", import.meta.url),
+);
 
 function thread(id: string, status: AppServerThread["status"]): AppServerThread {
   return {
@@ -37,6 +38,7 @@ function thread(id: string, status: AppServerThread["status"]): AppServerThread 
 
 async function withServer(
   run: (baseUrl: string, store: StatusStore) => Promise<void>,
+  apiOptions: Partial<Pick<HttpApiOptions, "uiAssets">> = {},
 ): Promise<void> {
   const store = new StatusStore({ staleAfterMs: 30000, now: () => 1000 });
   store.setAppServerConnection({
@@ -49,7 +51,7 @@ async function withServer(
     thread("idle-1", { type: "idle" }),
     thread("work-1", { type: "active", activeFlags: [] }),
   ]);
-  const api = createHttpApi({ host: "127.0.0.1", port: 0, store });
+  const api = createHttpApi({ host: "127.0.0.1", port: 0, store, ...apiOptions });
   await api.start();
   try {
     await run(api.url(), store);
@@ -268,18 +270,25 @@ test("unknown /ui asset returns JSON 404", async () => {
 });
 
 test("unavailable /ui asset returns stable JSON 500", async () => {
-  const originalMode = (await stat(UI_APP_PATH)).mode;
-  await chmod(UI_APP_PATH, 0);
-  try {
-    await withServer(async (baseUrl) => {
-      const response = await fetch(`${baseUrl}/ui/app.js`);
+  await withServer(
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/ui/unavailable.js`);
       assert.equal(response.status, 500);
       assert.deepEqual(await response.json(), {
         error: "ui_asset_unavailable",
         message: "UI asset unavailable",
       });
-    });
-  } finally {
-    await chmod(UI_APP_PATH, originalMode);
-  }
+    },
+    {
+      uiAssets: new Map([
+        [
+          "/ui/unavailable.js",
+          {
+            path: MISSING_UI_ASSET_PATH,
+            contentType: "text/javascript; charset=utf-8",
+          },
+        ],
+      ]),
+    },
+  );
 });

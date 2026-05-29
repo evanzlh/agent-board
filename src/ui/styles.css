@@ -211,9 +211,33 @@ tbody tr.is-expanded {
   background: #eef6ff;
 }
 
+.agent-row.is-stale td {
+  background: #fff8ed;
+}
+
+.agent-row.is-stale:hover td {
+  background: #fff1df;
+}
+
+.agent-row.is-stale.is-expanded td {
+  background: #fff3e3;
+}
+
+.agent-row.is-stale td:first-child {
+  box-shadow: inset 3px 0 0 #c47a2c;
+}
+
+.status-stack {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 6px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
   min-height: 22px;
   max-width: 100%;
   border-radius: 999px;
@@ -246,6 +270,20 @@ tbody tr.is-expanded {
 .status-pill[data-status="unknown"] {
   color: #4d5863;
   background: #e2e8ef;
+}
+
+.stale-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid #d9a76f;
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: #6d3f13;
+  background: #fff0dc;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .cell-truncate {
