@@ -156,7 +156,7 @@ Each agent record is derived from one Codex App Server thread.
 | `preview` | Thread preview text from Codex. |
 | `modelProvider` | Model provider reported by Codex. |
 | `cliVersion` | Codex CLI version reported by the App Server thread. |
-| `createdAt` / `updatedAt` | Thread timestamps from Codex. |
+| `createdAt` / `updatedAt` | Thread timestamps normalized to Unix milliseconds. |
 | `parentThreadId` | Parent thread ID for sub-agents when Codex exposes it. |
 | `agentNickname` / `agentRole` | Sub-agent identity hints when present. |
 | `lastTurn` | Last known turn status and timestamps. |

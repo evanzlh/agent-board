@@ -4,6 +4,7 @@ import {
   inferRawStatusFromActivity,
   inferRawStatusFromTurn,
   mapThreadStatus,
+  normalizeTimestampMs,
   normalizeThread,
 } from "../domain/mapper.ts";
 import type {
@@ -250,8 +251,8 @@ export class StatusStore extends EventEmitter {
     const previousTurn = current.lastTurn;
     const nextTurn: AgentLastTurn = {
       status: readTurnStatus(turn.status),
-      startedAt: readNumber(turn.startedAt) ?? previousTurn?.startedAt ?? null,
-      completedAt: readNumber(turn.completedAt) ?? null,
+      startedAt: readTimestampMs(turn.startedAt) ?? previousTurn?.startedAt ?? null,
+      completedAt: readTimestampMs(turn.completedAt) ?? null,
     };
     const rawStatus = inferRawStatusFromTurn(current.rawStatus, nextTurn);
     const nextStatus = turnPublicStatus(nextTurn, current.status);
@@ -354,8 +355,8 @@ function turnPublicStatus(
   return currentStatus;
 }
 
-function readNumber(value: unknown): number | null {
-  return typeof value === "number" ? value : null;
+function readTimestampMs(value: unknown): number | null {
+  return typeof value === "number" ? normalizeTimestampMs(value) : null;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

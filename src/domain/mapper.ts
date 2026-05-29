@@ -80,6 +80,17 @@ export function inferRawStatusFromActivity(
   return status;
 }
 
+export function normalizeTimestampMs(value: number): number {
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000_000 && absolute < 100_000_000_000) {
+    return value * 1000;
+  }
+  return value;
+}
+
 export function deriveAgentKind(thread: AppServerThread): AgentKind {
   if (thread.agentNickname || thread.agentRole || getSubAgentSource(thread.source) !== null) {
     return "sub_agent";
@@ -137,8 +148,8 @@ export function normalizeThread(thread: AppServerThread, options: NormalizeOptio
     preview: thread.preview,
     modelProvider: thread.modelProvider,
     cliVersion: thread.cliVersion,
-    createdAt: thread.createdAt,
-    updatedAt: thread.updatedAt,
+    createdAt: normalizeTimestampMs(thread.createdAt),
+    updatedAt: normalizeTimestampMs(thread.updatedAt),
     parentThreadId: deriveParentThreadId(thread),
     agentNickname: thread.agentNickname,
     agentRole: thread.agentRole,
@@ -157,8 +168,8 @@ function normalizeLastTurn(turn: AppServerLastTurn | null): AgentLastTurn | null
   const knownStatuses = new Set(["completed", "interrupted", "failed", "inProgress"]);
   return {
     status: knownStatuses.has(turn.status) ? (turn.status as AgentLastTurn["status"]) : "unknown",
-    startedAt: typeof turn.startedAt === "number" ? turn.startedAt : null,
-    completedAt: typeof turn.completedAt === "number" ? turn.completedAt : null,
+    startedAt: typeof turn.startedAt === "number" ? normalizeTimestampMs(turn.startedAt) : null,
+    completedAt: typeof turn.completedAt === "number" ? normalizeTimestampMs(turn.completedAt) : null,
   };
 }
 

@@ -159,8 +159,29 @@ test("normalizeThread returns stable public fields and preserves rawStatus", () 
   assert.equal(agent.displayName, "worker-1");
   assert.equal(agent.status, "waiting_approval");
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: ["waitingOnApproval"] });
+  assert.equal(agent.createdAt, 1780010000000);
+  assert.equal(agent.updatedAt, 1780010100000);
   assert.equal(agent.waitingSince, 1780010200000);
   assert.equal(agent.stale, false);
+});
+
+test("normalizeThread converts App Server second timestamps to milliseconds", () => {
+  const agent = normalizeThread(
+    thread({
+      createdAt: 1780010000,
+      updatedAt: 1780010100,
+      turns: [{ status: "completed", startedAt: 1780010200, completedAt: 1780010300 }],
+    }),
+    { nowMs: 1780010400000 },
+  );
+
+  assert.equal(agent.createdAt, 1780010000000);
+  assert.equal(agent.updatedAt, 1780010100000);
+  assert.deepEqual(agent.lastTurn, {
+    status: "completed",
+    startedAt: 1780010200000,
+    completedAt: 1780010300000,
+  });
 });
 
 test("normalizeThread uses in-progress turn as active evidence for notLoaded threads", () => {
@@ -176,7 +197,7 @@ test("normalizeThread uses in-progress turn as active evidence for notLoaded thr
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
   assert.deepEqual(agent.lastTurn, {
     status: "inProgress",
-    startedAt: 1780010200,
+    startedAt: 1780010200000,
     completedAt: null,
   });
 });
@@ -194,7 +215,7 @@ test("normalizeThread uses unresolved interrupted turn as active evidence for no
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
   assert.deepEqual(agent.lastTurn, {
     status: "interrupted",
-    startedAt: 1780067247,
+    startedAt: 1780067247000,
     completedAt: null,
   });
 });
@@ -260,7 +281,7 @@ test("normalizeThread stops preserving previous active evidence when current tur
   assert.deepEqual(agent.rawStatus, { type: "notLoaded" });
   assert.deepEqual(agent.lastTurn, {
     status: "interrupted",
-    startedAt: 1780067668,
-    completedAt: 1780067891,
+    startedAt: 1780067668000,
+    completedAt: 1780067891000,
   });
 });

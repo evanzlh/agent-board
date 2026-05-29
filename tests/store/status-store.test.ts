@@ -125,31 +125,31 @@ test("markStaleAgents emits agent.updated when an agent becomes stale", () => {
 });
 
 test("applies turn lifecycle notifications to lastTurn", () => {
-  let now = 1000;
+  let now = 1780010000000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
   store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
 
-  now = 2000;
+  now = 1780010010000;
   store.applyNotification({
     method: "turn/started",
-    params: { threadId: "one", turn: { status: "inProgress", startedAt: 2000 } },
+    params: { threadId: "one", turn: { status: "inProgress", startedAt: 1780010010 } },
   });
   assert.deepEqual(store.getAgent("one")?.lastTurn, {
     status: "inProgress",
-    startedAt: 2000,
+    startedAt: 1780010010000,
     completedAt: null,
   });
 
-  now = 3000;
+  now = 1780010020000;
   store.applyNotification({
     method: "turn/completed",
-    params: { threadId: "one", turn: { status: "completed", completedAt: 3000 } },
+    params: { threadId: "one", turn: { status: "completed", completedAt: 1780010020 } },
   });
   assert.equal(store.getAgent("one")?.status, "finished");
   assert.deepEqual(store.getAgent("one")?.lastTurn, {
     status: "completed",
-    startedAt: 2000,
-    completedAt: 3000,
+    startedAt: 1780010010000,
+    completedAt: 1780010020000,
   });
 });
 
