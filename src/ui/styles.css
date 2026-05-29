@@ -112,6 +112,9 @@ select {
   display: block;
   color: #637487;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summary-card strong {
@@ -219,6 +222,9 @@ tbody tr.is-expanded {
   background: #dff0ff;
   font-size: 12px;
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill[data-status="working"] {
