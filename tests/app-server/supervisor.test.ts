@@ -68,3 +68,18 @@ test("supervisor fails when no-start mode cannot proxy", async () => {
 
   await assert.rejects(() => supervisor.start({ autoStartAppServer: false }), /proxy unavailable/);
 });
+
+test("default supervisor rejects when codex cannot be spawned", async () => {
+  const originalPath = process.env.PATH;
+  process.env.PATH = "";
+  try {
+    const supervisor = createAppServerSupervisor();
+
+    await assert.rejects(
+      () => supervisor.start({ autoStartAppServer: true }),
+      /codex --version failed: spawn codex ENOENT/,
+    );
+  } finally {
+    process.env.PATH = originalPath;
+  }
+});

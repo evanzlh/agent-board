@@ -5,34 +5,131 @@ import { AppServerClient } from "../../src/app-server/client.ts";
 
 class FakeRpc extends EventEmitter {
   requests: Array<{ method: string; params: unknown }> = [];
-  responses = new Map<string, unknown>();
+  responses = new Map<string, unknown[]>();
+
+  respond(method: string, ...responses: unknown[]): void {
+    this.responses.set(method, responses);
+  }
 
   async request(method: string, params: unknown): Promise<unknown> {
     this.requests.push({ method, params });
-    return this.responses.get(method);
+    const responses = this.responses.get(method) ?? [];
+    return responses.shift();
   }
 }
 
 test("client initializes and fetches all thread pages", async () => {
   const rpc = new FakeRpc();
-  rpc.responses.set("initialize", { userAgent: "codex", codexHome: "/home/me/.codex" });
-  rpc.responses.set("thread/list", {
-    data: [],
-    nextCursor: null,
-    backwardsCursor: null,
-  });
-  rpc.responses.set("thread/loaded/list", { data: ["one"], nextCursor: null });
+  rpc.respond("initialize", { userAgent: "codex", codexHome: "/home/me/.codex" });
+  rpc.respond(
+    "thread/list",
+    {
+      data: [{ id: "thread-one" }],
+      nextCursor: "threads-page-2",
+      backwardsCursor: null,
+    },
+    { data: [{ id: "thread-two" }], nextCursor: null, backwardsCursor: null },
+  );
+  rpc.respond(
+    "thread/loaded/list",
+    { data: ["one"], nextCursor: "loaded-page-2" },
+    { data: ["two"], nextCursor: null },
+  );
 
   const client = new AppServerClient(rpc);
   await client.initialize();
   const state = await client.readInitialState();
 
-  assert.deepEqual(state, { threads: [], loadedThreadIds: ["one"] });
+  assert.deepEqual(state, {
+    threads: [{ id: "thread-one" }, { id: "thread-two" }],
+    loadedThreadIds: ["one", "two"],
+  });
   assert.deepEqual(rpc.requests.map((request) => request.method), [
     "initialize",
     "thread/list",
+    "thread/list",
+    "thread/loaded/list",
     "thread/loaded/list",
   ]);
+  assert.deepEqual(
+    rpc.requests.map((request) => request.params),
+    [
+      {
+        clientInfo: { name: "codex-status", version: "0.1.0" },
+        capabilities: { experimentalApi: true, requestAttestation: false },
+      },
+      {
+        cursor: null,
+        limit: 100,
+        sortKey: "updated_at",
+        sortDirection: "desc",
+        sourceKinds: [
+          "cli",
+          "vscode",
+          "exec",
+          "appServer",
+          "subAgent",
+          "subAgentReview",
+          "subAgentCompact",
+          "subAgentThreadSpawn",
+          "subAgentOther",
+          "unknown",
+        ],
+        archived: false,
+      },
+      {
+        cursor: "threads-page-2",
+        limit: 100,
+        sortKey: "updated_at",
+        sortDirection: "desc",
+        sourceKinds: [
+          "cli",
+          "vscode",
+          "exec",
+          "appServer",
+          "subAgent",
+          "subAgentReview",
+          "subAgentCompact",
+          "subAgentThreadSpawn",
+          "subAgentOther",
+          "unknown",
+        ],
+        archived: false,
+      },
+      { cursor: null, limit: 100 },
+      { cursor: "loaded-page-2", limit: 100 },
+    ],
+  );
+});
+
+test("client rejects repeated pagination cursors", async () => {
+  const rpc = new FakeRpc();
+  rpc.respond(
+    "thread/list",
+    { data: [], nextCursor: "same" },
+    { data: [], nextCursor: "same" },
+  );
+
+  const client = new AppServerClient(rpc);
+
+  await assert.rejects(() => client.readInitialState(), /thread\/list returned repeated cursor: same/);
+});
+
+test("client rejects repeated loaded-thread pagination cursors", async () => {
+  const rpc = new FakeRpc();
+  rpc.respond("thread/list", { data: [], nextCursor: null });
+  rpc.respond(
+    "thread/loaded/list",
+    { data: [], nextCursor: "same" },
+    { data: [], nextCursor: "same" },
+  );
+
+  const client = new AppServerClient(rpc);
+
+  await assert.rejects(
+    () => client.readInitialState(),
+    /thread\/loaded\/list returned repeated cursor: same/,
+  );
 });
 
 test("client emits normalized notifications", async () => {

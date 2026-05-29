@@ -88,16 +88,32 @@ function defaultDeps(): SupervisorDeps {
         const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
         const stdout: Buffer[] = [];
         const stderr: Buffer[] = [];
+        let settled = false;
 
         child.stdout.on("data", (chunk) => stdout.push(Buffer.from(chunk)));
         child.stderr.on("data", (chunk) => stderr.push(Buffer.from(chunk)));
-        child.on("close", (code) =>
+        child.on("error", (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve({
+            exitCode: 1,
+            stdout: Buffer.concat(stdout).toString("utf8"),
+            stderr: Buffer.concat([...stderr, Buffer.from(error.message)]).toString("utf8"),
+          });
+        });
+        child.on("close", (code) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           resolve({
             exitCode: code ?? 1,
             stdout: Buffer.concat(stdout).toString("utf8"),
             stderr: Buffer.concat(stderr).toString("utf8"),
-          }),
-        );
+          });
+        });
       }),
     spawnLongRunning: (command, args) => spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] }),
   };

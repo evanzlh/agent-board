@@ -45,6 +45,7 @@ export class AppServerClient extends EventEmitter {
   async #readAllThreads(): Promise<AppServerThread[]> {
     const all: AppServerThread[] = [];
     let cursor: string | null = null;
+    const seenCursors = new Set<string>();
 
     do {
       const response = (await this.#rpc.request("thread/list", {
@@ -67,7 +68,7 @@ export class AppServerClient extends EventEmitter {
         archived: false,
       })) as { data?: AppServerThread[]; nextCursor?: string | null };
       all.push(...(response.data ?? []));
-      cursor = response.nextCursor ?? null;
+      cursor = readNextCursor("thread/list", response.nextCursor ?? null, seenCursors);
     } while (cursor);
 
     return all;
@@ -76,6 +77,7 @@ export class AppServerClient extends EventEmitter {
   async #readAllLoadedThreadIds(): Promise<string[]> {
     const all: string[] = [];
     let cursor: string | null = null;
+    const seenCursors = new Set<string>();
 
     do {
       const response = (await this.#rpc.request("thread/loaded/list", {
@@ -83,9 +85,20 @@ export class AppServerClient extends EventEmitter {
         limit: 100,
       })) as { data?: string[]; nextCursor?: string | null };
       all.push(...(response.data ?? []));
-      cursor = response.nextCursor ?? null;
+      cursor = readNextCursor("thread/loaded/list", response.nextCursor ?? null, seenCursors);
     } while (cursor);
 
     return all;
   }
+}
+
+function readNextCursor(method: string, cursor: string | null, seenCursors: Set<string>): string | null {
+  if (cursor === null) {
+    return null;
+  }
+  if (seenCursors.has(cursor)) {
+    throw new Error(`${method} returned repeated cursor: ${cursor}`);
+  }
+  seenCursors.add(cursor);
+  return cursor;
 }
