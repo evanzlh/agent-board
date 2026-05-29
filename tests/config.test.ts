@@ -48,5 +48,34 @@ test("parseArgs overrides host, port, refresh interval, and auto-start", () => {
 
 test("parseArgs rejects unknown commands and invalid numbers", () => {
   assert.throws(() => parseArgs(["unknown"]), /Unknown command/);
-  assert.throws(() => parseArgs(["daemon", "--port", "abc"]), /Invalid number for --port/);
+  assert.throws(() => parseArgs(["daemon", "--port", "abc"]), /Invalid port for --port/);
+});
+
+test("parseArgs rejects missing option values", () => {
+  assert.throws(() => parseArgs(["daemon", "--host"]), /Missing value for --host/);
+  assert.throws(() => parseArgs(["daemon", "--port"]), /Missing value for --port/);
+  assert.throws(() => parseArgs(["daemon", "--refresh-interval-ms"]), /Missing value for --refresh-interval-ms/);
+  assert.throws(() => parseArgs(["daemon", "--stale-after-ms"]), /Missing value for --stale-after-ms/);
+});
+
+test("parseArgs rejects unknown options", () => {
+  assert.throws(() => parseArgs(["daemon", "--verbose"]), /Unknown option: --verbose/);
+});
+
+test("parseArgs rejects negative values", () => {
+  assert.throws(() => parseArgs(["daemon", "--port", "-1"]), /Invalid port for --port/);
+  assert.throws(() => parseArgs(["daemon", "--refresh-interval-ms", "-1"]), /Invalid positive integer for --refresh-interval-ms/);
+  assert.throws(() => parseArgs(["daemon", "--stale-after-ms", "-1"]), /Invalid positive integer for --stale-after-ms/);
+});
+
+test("parseArgs rejects zero for interval and stale durations", () => {
+  assert.throws(() => parseArgs(["daemon", "--refresh-interval-ms", "0"]), /Invalid positive integer for --refresh-interval-ms/);
+  assert.throws(() => parseArgs(["daemon", "--stale-after-ms", "0"]), /Invalid positive integer for --stale-after-ms/);
+});
+
+test("parseArgs validates port range while allowing ephemeral port zero", () => {
+  assert.equal(parseArgs(["daemon", "--port", "0"]).config.port, 0);
+  assert.equal(parseArgs(["daemon", "--port", "65535"]).config.port, 65535);
+  assert.throws(() => parseArgs(["daemon", "--port", "-1"]), /Invalid port for --port/);
+  assert.throws(() => parseArgs(["daemon", "--port", "65536"]), /Invalid port for --port/);
 });

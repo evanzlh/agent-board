@@ -32,13 +32,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
     if (arg === "--host") {
       config.host = readValue(rest, ++index, arg);
     } else if (arg === "--port") {
-      config.port = readNumber(rest, ++index, arg);
+      config.port = readPort(rest, ++index, arg);
     } else if (arg === "--no-start-app-server") {
       config.autoStartAppServer = false;
     } else if (arg === "--refresh-interval-ms") {
-      config.refreshIntervalMs = readNumber(rest, ++index, arg);
+      config.refreshIntervalMs = readPositiveInteger(rest, ++index, arg);
     } else if (arg === "--stale-after-ms") {
-      config.staleAfterMs = readNumber(rest, ++index, arg);
+      config.staleAfterMs = readPositiveInteger(rest, ++index, arg);
     } else {
       throw new Error(`Unknown option: ${arg}`);
     }
@@ -55,11 +55,27 @@ function readValue(args: string[], index: number, flag: string): string {
   return value;
 }
 
-function readNumber(args: string[], index: number, flag: string): number {
+function readInteger(args: string[], index: number, flag: string, label = "number"): { raw: string; value: number } {
   const raw = readValue(args, index, flag);
   const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    throw new Error(`Invalid number for ${flag}: ${raw}`);
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`Invalid ${label} for ${flag}: ${raw}`);
   }
-  return parsed;
+  return { raw, value: parsed };
+}
+
+function readPort(args: string[], index: number, flag: string): number {
+  const { raw, value } = readInteger(args, index, flag, "port");
+  if (value < 0 || value > 65535) {
+    throw new Error(`Invalid port for ${flag}: ${raw}`);
+  }
+  return value;
+}
+
+function readPositiveInteger(args: string[], index: number, flag: string): number {
+  const { raw, value } = readInteger(args, index, flag, "positive integer");
+  if (value <= 0) {
+    throw new Error(`Invalid positive integer for ${flag}: ${raw}`);
+  }
+  return value;
 }
