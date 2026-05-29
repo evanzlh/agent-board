@@ -91,6 +91,15 @@ export function normalizeTimestampMs(value: number): number {
   return value;
 }
 
+export function normalizeTurnStatus(value: unknown, completedAt: number | null): AgentLastTurn["status"] {
+  const status =
+    value === "completed" || value === "interrupted" || value === "failed" || value === "inProgress"
+      ? value
+      : "unknown";
+
+  return status === "interrupted" && completedAt === null ? "inProgress" : status;
+}
+
 export function deriveAgentKind(thread: AppServerThread): AgentKind {
   if (thread.agentNickname || thread.agentRole || getSubAgentSource(thread.source) !== null) {
     return "sub_agent";
@@ -165,11 +174,11 @@ function normalizeLastTurn(turn: AppServerLastTurn | null): AgentLastTurn | null
     return null;
   }
 
-  const knownStatuses = new Set(["completed", "interrupted", "failed", "inProgress"]);
+  const completedAt = typeof turn.completedAt === "number" ? normalizeTimestampMs(turn.completedAt) : null;
   return {
-    status: knownStatuses.has(turn.status) ? (turn.status as AgentLastTurn["status"]) : "unknown",
+    status: normalizeTurnStatus(turn.status, completedAt),
     startedAt: typeof turn.startedAt === "number" ? normalizeTimestampMs(turn.startedAt) : null,
-    completedAt: typeof turn.completedAt === "number" ? normalizeTimestampMs(turn.completedAt) : null,
+    completedAt,
   };
 }
 

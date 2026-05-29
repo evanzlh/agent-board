@@ -6,6 +6,7 @@ import {
   mapThreadStatus,
   normalizeTimestampMs,
   normalizeThread,
+  normalizeTurnStatus,
 } from "../domain/mapper.ts";
 import type {
   AgentKind,
@@ -249,10 +250,11 @@ export class StatusStore extends EventEmitter {
     }
     const turn = isObject(params.turn) ? params.turn : params;
     const previousTurn = current.lastTurn;
+    const completedAt = readTimestampMs(turn.completedAt);
     const nextTurn: AgentLastTurn = {
-      status: readTurnStatus(turn.status),
+      status: normalizeTurnStatus(turn.status, completedAt),
       startedAt: readTimestampMs(turn.startedAt) ?? previousTurn?.startedAt ?? null,
-      completedAt: readTimestampMs(turn.completedAt) ?? null,
+      completedAt,
     };
     if (isOlderTurn(nextTurn, previousTurn)) {
       this.#setAgent({
@@ -339,12 +341,6 @@ function summarizeAgents(agents: AgentStatus[]): StatusSummary {
   }
 
   return summary;
-}
-
-function readTurnStatus(value: unknown): AgentLastTurn["status"] {
-  return value === "completed" || value === "interrupted" || value === "failed" || value === "inProgress"
-    ? value
-    : "unknown";
 }
 
 function turnPublicStatus(

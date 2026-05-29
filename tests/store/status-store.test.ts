@@ -306,6 +306,26 @@ test("turn started replaces notLoaded rawStatus with active evidence", () => {
   assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
 });
 
+test("unresolved interrupted turn notifications are displayed as in progress", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });
+  store.replaceThreads([thread("one", { type: "notLoaded" })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "turn/started",
+    params: { threadId: "one", turn: { status: "interrupted", startedAt: 1780010200, completedAt: null } },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.lastTurn, {
+    status: "inProgress",
+    startedAt: 1780010200000,
+    completedAt: null,
+  });
+});
+
 test("item started treats notLoaded thread metadata as active evidence", () => {
   let now = 1000;
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => now });

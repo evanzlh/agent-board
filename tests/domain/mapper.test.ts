@@ -222,7 +222,7 @@ test("normalizeThread uses in-progress turn as active evidence for notLoaded thr
   });
 });
 
-test("normalizeThread uses unresolved interrupted turn as active evidence for notLoaded threads", () => {
+test("normalizeThread displays unresolved interrupted turn as in progress", () => {
   const agent = normalizeThread(
     thread({
       status: { type: "notLoaded" },
@@ -234,7 +234,7 @@ test("normalizeThread uses unresolved interrupted turn as active evidence for no
   assert.equal(agent.status, "working");
   assert.deepEqual(agent.rawStatus, { type: "active", activeFlags: [] });
   assert.deepEqual(agent.lastTurn, {
-    status: "interrupted",
+    status: "inProgress",
     startedAt: 1780067247000,
     completedAt: null,
   });
