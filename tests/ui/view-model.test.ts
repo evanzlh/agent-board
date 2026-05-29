@@ -22,7 +22,7 @@ const baseAgent = {
   lastTurn: { status: "completed", startedAt: 1780010000000, completedAt: 1780010050000 },
 };
 
-test("filterAgents filters by status kind cwd and search", () => {
+test("filterAgents applies each filter independently", () => {
   const agents = [
     baseAgent,
     {
@@ -36,15 +36,32 @@ test("filterAgents filters by status kind cwd and search", () => {
       rawStatus: { type: "active", activeFlags: [] },
       lastTurn: { status: "inProgress", startedAt: 1780010200000, completedAt: null },
     },
+    {
+      ...baseAgent,
+      id: "agent-worker",
+      displayName: "Dashboard Worker",
+      status: "working",
+      cwd: "/repo/worker",
+      preview: "Render status dashboard",
+      rawStatus: { type: "active", activeFlags: [] },
+      lastTurn: { status: "inProgress", startedAt: 1780010300000, completedAt: null },
+    },
   ];
 
   assert.deepEqual(
-    filterAgents(agents, {
-      status: "working",
-      kind: "sub_agent",
-      cwd: "sub",
-      search: "raw status",
-    }).map((agent) => agent.id),
+    filterAgents(agents, { status: "working" }).map((agent) => agent.id),
+    ["agent-sub", "agent-worker"],
+  );
+  assert.deepEqual(
+    filterAgents(agents, { kind: "sub_agent" }).map((agent) => agent.id),
+    ["agent-sub"],
+  );
+  assert.deepEqual(
+    filterAgents(agents, { cwd: "SUB" }).map((agent) => agent.id),
+    ["agent-sub"],
+  );
+  assert.deepEqual(
+    filterAgents(agents, { search: "RAW STATUS" }).map((agent) => agent.id),
     ["agent-sub"],
   );
 });
