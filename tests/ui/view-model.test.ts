@@ -88,8 +88,15 @@ test("formatTimestamp renders numbers and falls back for nullish values", () => 
 
 test("safeJson and compactJson render unknown values safely", () => {
   assert.equal(safeJson(undefined), EMPTY_VALUE);
+  assert.equal(compactJson(undefined), EMPTY_VALUE);
   assert.equal(compactJson(null), "null");
   assert.equal(compactJson({ type: "active", activeFlags: [] }), "{\"type\":\"active\",\"activeFlags\":[]}");
+  assert.equal(safeJson({ type: "idle" }), "{\n  \"type\": \"idle\"\n}");
+
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  assert.match(compactJson(circular), /^\[unserializable:/);
+  assert.match(safeJson(circular), /^\[unserializable:/);
 });
 
 test("valueOrEmpty trims strings and handles missing values", () => {
