@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { StatusStore } from "../../src/store/status-store.ts";
 import { createHttpApi } from "../../src/http/api.ts";
 import type { AppServerThread } from "../../src/domain/types.ts";
@@ -51,6 +53,24 @@ async function withServer(
   }
 }
 
+async function listenOnEphemeralPort(): Promise<http.Server> {
+  const server = http.createServer((_request, response) => response.end("busy"));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  return server;
+}
+
+async function closeServer(server: http.Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
 test("GET /health returns health JSON", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/health`);
@@ -87,6 +107,32 @@ test("GET /agents/:id returns one agent or JSON 404", async () => {
   });
 });
 
+test("GET /agents/:id returns JSON 400 for malformed encoded IDs", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/agents/%E0%A4%A`, {
+      signal: AbortSignal.timeout(1000),
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), {
+      error: "bad_request",
+      message: "malformed_agent_id",
+    });
+  });
+});
+
+test("API returns JSON errors for non-GET methods and unknown paths", async () => {
+  await withServer(async (baseUrl) => {
+    const method = await fetch(`${baseUrl}/status`, { method: "POST" });
+    assert.equal(method.status, 405);
+    assert.deepEqual(await method.json(), { error: "method_not_allowed" });
+
+    const missing = await fetch(`${baseUrl}/missing-route`);
+    assert.equal(missing.status, 404);
+    assert.deepEqual(await missing.json(), { error: "not_found" });
+  });
+});
+
 test("GET /events streams agent.updated events", async () => {
   await withServer(async (baseUrl, store) => {
     const abort = new AbortController();
@@ -106,4 +152,19 @@ test("GET /events streams agent.updated events", async () => {
     assert.match(chunk, /"agentId":"work-1"/);
     await new Promise((resolve) => setImmediate(resolve));
   });
+});
+
+test("start failure does not leave a store event listener attached", async () => {
+  const blocker = await listenOnEphemeralPort();
+  try {
+    const address = blocker.address() as AddressInfo;
+    const store = new StatusStore({ staleAfterMs: 30000, now: () => 1000 });
+    const api = createHttpApi({ host: "127.0.0.1", port: address.port, store });
+
+    await assert.rejects(() => api.start());
+
+    assert.equal(store.listenerCount("event"), 0);
+  } finally {
+    await closeServer(blocker);
+  }
 });

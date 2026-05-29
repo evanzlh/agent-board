@@ -26,8 +26,7 @@ export function createHttpApi(options: HttpApiOptions): HttpApi {
       client.write(payload);
     }
   };
-
-  options.store.on("event", onStoreEvent);
+  let subscribed = false;
 
   return {
     start: () =>
@@ -35,12 +34,19 @@ export function createHttpApi(options: HttpApiOptions): HttpApi {
         server.once("error", reject);
         server.listen(options.port, options.host, () => {
           server.off("error", reject);
+          if (!subscribed) {
+            options.store.on("event", onStoreEvent);
+            subscribed = true;
+          }
           resolve();
         });
       }),
     stop: () =>
       new Promise((resolve, reject) => {
-        options.store.off("event", onStoreEvent);
+        if (subscribed) {
+          options.store.off("event", onStoreEvent);
+          subscribed = false;
+        }
         for (const client of sseClients) {
           client.end();
         }
@@ -82,7 +88,11 @@ async function handleRequest(
   }
 
   if (url.pathname.startsWith("/agents/")) {
-    const id = decodeURIComponent(url.pathname.slice("/agents/".length));
+    const id = decodePathSegment(url.pathname.slice("/agents/".length));
+    if (id === null) {
+      sendJson(response, 400, { error: "bad_request", message: "malformed_agent_id" });
+      return;
+    }
     const agent = store.getAgent(id);
     if (!agent) {
       sendJson(response, 404, { error: "agent_not_found", id });
@@ -122,6 +132,14 @@ function parseFilters(url: URL): AgentFilters {
     filters.cwd = cwd;
   }
   return filters;
+}
+
+function decodePathSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 function sendJson(response: http.ServerResponse, status: number, body: unknown): void {
