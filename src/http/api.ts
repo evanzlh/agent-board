@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 import type { AgentFilters, StatusStore, StoreEvent } from "../store/status-store.ts";
 
 export type HttpApiOptions = {
@@ -13,6 +15,27 @@ export type HttpApi = {
   stop: () => Promise<void>;
   url: () => string;
 };
+
+type UiAsset = {
+  path: string;
+  contentType: string;
+};
+
+const UI_INDEX_PATH = fileURLToPath(new URL("../ui/index.html", import.meta.url));
+const UI_APP_PATH = fileURLToPath(new URL("../ui/app.js", import.meta.url));
+const UI_VIEW_MODEL_PATH = fileURLToPath(new URL("../ui/view-model.js", import.meta.url));
+const UI_STYLES_PATH = fileURLToPath(new URL("../ui/styles.css", import.meta.url));
+
+const UI_ASSETS = new Map<string, UiAsset>([
+  ["/ui", { path: UI_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
+  ["/ui/", { path: UI_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
+  ["/ui/app.js", { path: UI_APP_PATH, contentType: "text/javascript; charset=utf-8" }],
+  [
+    "/ui/view-model.js",
+    { path: UI_VIEW_MODEL_PATH, contentType: "text/javascript; charset=utf-8" },
+  ],
+  ["/ui/styles.css", { path: UI_STYLES_PATH, contentType: "text/css; charset=utf-8" }],
+]);
 
 export function createHttpApi(options: HttpApiOptions): HttpApi {
   const sseClients = new Set<http.ServerResponse>();
@@ -77,6 +100,10 @@ async function handleRequest(
     return;
   }
 
+  if (await sendUiAsset(url.pathname, response)) {
+    return;
+  }
+
   if (url.pathname === "/health") {
     sendJson(response, 200, store.getHealth());
     return;
@@ -120,6 +147,28 @@ async function handleRequest(
   }
 
   sendJson(response, 404, { error: "not_found" });
+}
+
+async function sendUiAsset(pathname: string, response: http.ServerResponse): Promise<boolean> {
+  const asset = UI_ASSETS.get(pathname);
+  if (!asset) {
+    return false;
+  }
+
+  try {
+    const body = await readFile(asset.path);
+    response.writeHead(200, {
+      "content-type": asset.contentType,
+      "cache-control": "no-cache",
+    });
+    response.end(body);
+  } catch (error) {
+    sendJson(response, 500, {
+      error: "ui_asset_unavailable",
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return true;
 }
 
 function parseFilters(url: URL): AgentFilters {

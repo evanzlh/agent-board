@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Codex Status</title>
+    <link rel="stylesheet" href="/ui/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="health-bar">
+        <div>
+          <h1>Codex Status</h1>
+          <p id="health-line">Loading...</p>
+        </div>
+        <button id="refresh-button" type="button">Refresh</button>
+      </header>
+      <section id="summary" class="summary-grid" aria-label="Status summary"></section>
+      <section class="filters" aria-label="Agent filters"></section>
+      <section class="table-wrap" aria-label="Agents">
+        <table>
+          <tbody id="agent-table-body"></tbody>
+        </table>
+      </section>
+    </main>
+    <script type="module" src="/ui/app.js"></script>
+  </body>
+</html>

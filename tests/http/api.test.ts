@@ -202,3 +202,42 @@ test("start failure does not leave a store event listener attached", async () =>
     await closeServer(blocker);
   }
 });
+
+test("GET /ui serves the Web frontend HTML", async () => {
+  await withServer(async (baseUrl) => {
+    const bare = await fetch(`${baseUrl}/ui`);
+    assert.equal(bare.status, 200);
+    assert.equal(bare.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.match(await bare.text(), /<title>Codex Status<\/title>/);
+
+    const slash = await fetch(`${baseUrl}/ui/`);
+    assert.equal(slash.status, 200);
+    assert.equal(slash.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.match(await slash.text(), /id="agent-table-body"/);
+  });
+});
+
+test("GET /ui static assets use explicit content types", async () => {
+  await withServer(async (baseUrl) => {
+    const scripts = [
+      { path: "/ui/app.js", contentType: "text/javascript; charset=utf-8" },
+      { path: "/ui/view-model.js", contentType: "text/javascript; charset=utf-8" },
+      { path: "/ui/styles.css", contentType: "text/css; charset=utf-8" },
+    ];
+
+    for (const asset of scripts) {
+      const response = await fetch(`${baseUrl}${asset.path}`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), asset.contentType);
+      assert.ok((await response.text()).length > 0);
+    }
+  });
+});
+
+test("unknown /ui asset returns JSON 404", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/ui/missing.js`);
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { error: "not_found" });
+  });
+});
