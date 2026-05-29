@@ -49,8 +49,10 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   let currentClient: ClientLike | null = null;
   let staleTimer: NodeJS.Timeout | null = null;
   let api: HttpApi | null = null;
+  const trackedAppServers = new Set<AppServerProcess>();
   let stopped = false;
   let reconnecting: Promise<void> | null = null;
+  trackedAppServers.add(appServer);
 
   const connect = async (throwOnFailure: boolean): Promise<void> => {
     let nextAppServer: AppServerProcess | null = null;
@@ -61,6 +63,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
           : await supervisor.start({
               autoStartAppServer: options.config.autoStartAppServer,
             });
+      trackedAppServers.add(nextAppServer);
 
       const nextClient =
         options.clientFactory?.(nextAppServer) ??
@@ -99,10 +102,12 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
 
       if (previousAppServer && previousAppServer !== nextAppServer) {
         previousAppServer.stop();
+        trackedAppServers.delete(previousAppServer);
       }
     } catch (error) {
       if (nextAppServer && nextAppServer !== currentAppServer) {
         nextAppServer.stop();
+        trackedAppServers.delete(nextAppServer);
       }
       store.setAppServerConnection({
         connected: false,
@@ -145,7 +150,10 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
         stopped = true;
       },
       () => {
-        currentAppServer?.stop();
+        for (const trackedAppServer of trackedAppServers) {
+          trackedAppServer.stop();
+        }
+        trackedAppServers.clear();
         currentAppServer = null;
         currentClient = null;
       },
@@ -158,7 +166,10 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     if (api) {
       await api.stop().catch(() => {});
     }
-    currentAppServer?.stop();
+    for (const trackedAppServer of trackedAppServers) {
+      trackedAppServer.stop();
+    }
+    trackedAppServers.clear();
     throw error;
   }
 }

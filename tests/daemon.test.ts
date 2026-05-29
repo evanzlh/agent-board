@@ -12,10 +12,14 @@ class FakeClient extends EventEmitter {
   initializeCalls = 0;
   readCalls = 0;
   initializeError: Error | null = null;
+  initializeLatch: Promise<void> | null = null;
   threads: AppServerThread[] = [];
 
   async initialize(): Promise<void> {
     this.initializeCalls += 1;
+    if (this.initializeLatch) {
+      await this.initializeLatch;
+    }
     if (this.initializeError) {
       throw this.initializeError;
     }
@@ -377,6 +381,50 @@ test("daemon reconnects and refreshes state after app server client close", asyn
   } finally {
     await daemon.stop();
   }
+});
+
+test("daemon stop closes an app server process from an in-flight reconnect", async () => {
+  let starts = 0;
+  const clients: FakeClient[] = [];
+  const stopped: number[] = [];
+  const daemon = await startDaemon({
+    config: {
+      host: "127.0.0.1",
+      port: 0,
+      autoStartAppServer: true,
+      refreshIntervalMs: 10,
+      staleAfterMs: 1000,
+    },
+    supervisor: {
+      async start() {
+        starts += 1;
+        const id = starts;
+        return {
+          mode: "managed-child",
+          cliVersion: "codex-cli 0.135.0",
+          process: { kill: () => true },
+          stop: () => stopped.push(id),
+        };
+      },
+    },
+    clientFactory: () => {
+      const client = new FakeClient();
+      if (starts === 1) {
+        client.threads = [thread("one", { type: "idle" })];
+      } else {
+        client.initializeLatch = new Promise(() => {});
+      }
+      clients.push(client);
+      return client;
+    },
+  });
+
+  clients[0].emit("close", { code: 1, signal: null });
+  await waitFor(() => assert.equal(starts, 2));
+
+  await daemon.stop();
+
+  assert.deepEqual(stopped.sort(), [1, 2]);
 });
 
 test("CLI without a command exits non-zero and prints Unknown command", async () => {
