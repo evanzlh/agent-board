@@ -6,7 +6,7 @@ import { createHttpApi } from "./http/api.ts";
 import type { DaemonConfig } from "./config.ts";
 import type { AppServerProcess, AppServerSupervisor } from "./app-server/supervisor.ts";
 import type { InitialAppServerState } from "./app-server/client.ts";
-import type { HttpApi } from "./http/api.ts";
+import type { HttpApi, HttpApiOptions } from "./http/api.ts";
 
 export type DaemonHandle = {
   url: string;
@@ -27,6 +27,7 @@ export type StartDaemonOptions = {
   now?: () => number;
   supervisor?: AppServerSupervisor;
   clientFactory?: (appServer: AppServerProcess) => ClientLike;
+  httpApiFactory?: (options: HttpApiOptions) => HttpApi;
 };
 
 export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHandle> {
@@ -65,7 +66,8 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     store.replaceThreads(initial.threads);
 
     staleTimer = setInterval(() => store.markStaleAgents(), options.config.refreshIntervalMs);
-    api = createHttpApi({
+    const httpApiFactory = options.httpApiFactory ?? createHttpApi;
+    api = httpApiFactory({
       host: options.config.host,
       port: options.config.port,
       store,
@@ -107,6 +109,9 @@ async function stopDaemon(
   appServer: AppServerProcess,
 ): Promise<void> {
   clearInterval(staleTimer);
-  await api.stop();
-  appServer.stop();
+  try {
+    await api.stop();
+  } finally {
+    appServer.stop();
+  }
 }
