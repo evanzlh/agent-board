@@ -1,0 +1,17 @@
+{
+  "name": "codex-status",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codex-status": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.ts",
+    "start": "node src/cli.ts daemon",
+    "smoke:real": "node scripts/smoke-real-app-server.ts"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
