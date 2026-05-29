@@ -1,11 +1,15 @@
+import { chmod, stat } from "node:fs/promises";
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import net from "node:net";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 import { StatusStore } from "../../src/store/status-store.ts";
 import { createHttpApi } from "../../src/http/api.ts";
 import type { AppServerThread } from "../../src/domain/types.ts";
+
+const UI_APP_PATH = fileURLToPath(new URL("../../src/ui/app.js", import.meta.url));
 
 function thread(id: string, status: AppServerThread["status"]): AppServerThread {
   return {
@@ -208,11 +212,13 @@ test("GET /ui serves the Web frontend HTML", async () => {
     const bare = await fetch(`${baseUrl}/ui`);
     assert.equal(bare.status, 200);
     assert.equal(bare.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(bare.headers.get("cache-control"), "no-cache");
     assert.match(await bare.text(), /<title>Codex Status<\/title>/);
 
     const slash = await fetch(`${baseUrl}/ui/`);
     assert.equal(slash.status, 200);
     assert.equal(slash.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(slash.headers.get("cache-control"), "no-cache");
     assert.match(await slash.text(), /id="agent-table-body"/);
   });
 });
@@ -229,6 +235,7 @@ test("GET /ui static assets use explicit content types", async () => {
       const response = await fetch(`${baseUrl}${asset.path}`);
       assert.equal(response.status, 200);
       assert.equal(response.headers.get("content-type"), asset.contentType);
+      assert.equal(response.headers.get("cache-control"), "no-cache");
       assert.ok((await response.text()).length > 0);
     }
   });
@@ -236,8 +243,43 @@ test("GET /ui static assets use explicit content types", async () => {
 
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/ui/missing.js`);
-    assert.equal(response.status, 404);
-    assert.deepEqual(await response.json(), { error: "not_found" });
+    const paths = [
+      { path: "/ui/missing.js", raw: false },
+      { path: "/ui/app.js.map", raw: false },
+      { path: "/ui/%2e%2e/status", raw: true },
+    ];
+
+    for (const { path, raw } of paths) {
+      if (raw) {
+        const port = Number(new URL(baseUrl).port);
+        const response = await sendRawHttpRequest(
+          port,
+          `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+        );
+        assert.match(response, /^HTTP\/1\.1 404 Not Found/);
+        assert.match(response, /{"error":"not_found"}/);
+      } else {
+        const response = await fetch(`${baseUrl}${path}`);
+        assert.equal(response.status, 404);
+        assert.deepEqual(await response.json(), { error: "not_found" });
+      }
+    }
   });
+});
+
+test("unavailable /ui asset returns stable JSON 500", async () => {
+  const originalMode = (await stat(UI_APP_PATH)).mode;
+  await chmod(UI_APP_PATH, 0);
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/ui/app.js`);
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), {
+        error: "ui_asset_unavailable",
+        message: "UI asset unavailable",
+      });
+    });
+  } finally {
+    await chmod(UI_APP_PATH, originalMode);
+  }
 });

@@ -100,7 +100,13 @@ async function handleRequest(
     return;
   }
 
-  if (await sendUiAsset(url.pathname, response)) {
+  const rawPathname = request.url?.split("?", 1)[0] ?? "/";
+  if (await sendUiAsset(rawPathname, response)) {
+    return;
+  }
+
+  if (rawPathname === "/ui" || rawPathname.startsWith("/ui/")) {
+    sendJson(response, 404, { error: "not_found" });
     return;
   }
 
@@ -162,10 +168,10 @@ async function sendUiAsset(pathname: string, response: http.ServerResponse): Pro
       "cache-control": "no-cache",
     });
     response.end(body);
-  } catch (error) {
+  } catch {
     sendJson(response, 500, {
       error: "ui_asset_unavailable",
-      message: error instanceof Error ? error.message : String(error),
+      message: "UI asset unavailable",
     });
   }
   return true;
