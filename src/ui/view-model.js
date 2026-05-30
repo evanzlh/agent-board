@@ -1,10 +1,11 @@
 export const EMPTY_VALUE = "-";
 
-export function filterAgents(agents, filters = {}) {
+export function filterAgents(agents, filters = {}, nowMs = Date.now()) {
   const status = normalizeFilter(filters.status);
   const kind = normalizeFilter(filters.kind);
   const cwd = normalizeSearch(filters.cwd);
   const search = normalizeSearch(filters.search);
+  const activeSince = readActiveSince(nowMs, filters.activeWithinMs);
 
   return agents.filter((agent) => {
     if (status !== "all" && agent.status !== status) {
@@ -17,6 +18,9 @@ export function filterAgents(agents, filters = {}) {
       return false;
     }
     if (search && !agentSearchText(agent).includes(search)) {
+      return false;
+    }
+    if (activeSince !== null && agentActivityAt(agent) < activeSince) {
       return false;
     }
     return true;
@@ -72,6 +76,26 @@ function normalizeFilter(value) {
 
 function normalizeSearch(value) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function readActiveSince(nowMs, activeWithinMs) {
+  const number = Number(activeWithinMs);
+  if (!Number.isFinite(number) || number <= 0) {
+    return null;
+  }
+  return nowMs - number;
+}
+
+function agentActivityAt(agent) {
+  return Math.max(
+    numberOrNegativeInfinity(agent.updatedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.startedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.completedAt),
+  );
+}
+
+function numberOrNegativeInfinity(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
 }
 
 function agentSearchText(agent) {

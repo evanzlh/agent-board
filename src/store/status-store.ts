@@ -37,6 +37,7 @@ export type AgentFilters = {
   status?: AgentPublicStatus;
   kind?: AgentKind;
   cwd?: string;
+  activeWithinMs?: number;
 };
 
 export type StoreEvent = {
@@ -157,10 +158,12 @@ export class StatusStore extends EventEmitter {
   }
 
   getAgents(filters: AgentFilters = {}): AgentStatus[] {
+    const activeSince = readActiveSince(this.#now(), filters.activeWithinMs);
     return [...this.#agents.values()]
       .filter((agent) => !filters.status || agent.status === filters.status)
       .filter((agent) => !filters.kind || agent.kind === filters.kind)
       .filter((agent) => !filters.cwd || agent.cwd === filters.cwd)
+      .filter((agent) => activeSince === null || agentActivityAt(agent) >= activeSince)
       .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
   }
 
@@ -341,6 +344,21 @@ function summarizeAgents(agents: AgentStatus[]): StatusSummary {
   }
 
   return summary;
+}
+
+function readActiveSince(nowMs: number, activeWithinMs: number | undefined): number | null {
+  if (typeof activeWithinMs !== "number" || !Number.isFinite(activeWithinMs) || activeWithinMs <= 0) {
+    return null;
+  }
+  return nowMs - activeWithinMs;
+}
+
+function agentActivityAt(agent: AgentStatus): number {
+  return Math.max(
+    agent.updatedAt,
+    agent.lastTurn?.startedAt ?? Number.NEGATIVE_INFINITY,
+    agent.lastTurn?.completedAt ?? Number.NEGATIVE_INFINITY,
+  );
 }
 
 function turnPublicStatus(

@@ -86,7 +86,7 @@ It includes:
 
 - App Server connection line with mode, CLI version, daemon version, last load time, and refresh state.
 - Summary counters for total, working, idle, finished, approval-waiting, input-waiting, error, and unknown agents.
-- Filterable table by status, kind, working directory, or free-text search.
+- Filterable table by status, kind, active time window, working directory, or free-text search.
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`.
 - Expandable per-agent JSON details for debugging raw status and timestamps.
 
@@ -102,7 +102,7 @@ All endpoints are local HTTP `GET` routes.
 | `GET /ui/` | Web dashboard HTML. |
 | `GET /health` | Daemon and App Server health snapshot. |
 | `GET /status` | Full status snapshot with summary and agents. |
-| `GET /agents` | Agent list. Supports `status`, `kind`, and `cwd` filters. |
+| `GET /agents` | Agent list. Supports `status`, `kind`, `cwd`, and `activeWithinMs` filters. |
 | `GET /agents/:id` | Single agent by thread ID. |
 | `GET /events` | Server-Sent Events stream for `agent.updated`. |
 
@@ -112,7 +112,10 @@ Filter examples:
 curl "http://127.0.0.1:17345/agents?status=waiting_approval"
 curl "http://127.0.0.1:17345/agents?kind=sub_agent"
 curl "http://127.0.0.1:17345/agents?cwd=/home/wh/my_project/codex_status"
+curl "http://127.0.0.1:17345/agents?status=working&activeWithinMs=300000"
 ```
+
+`activeWithinMs` filters agents whose latest App Server activity is within the provided millisecond window. Activity time is computed from the newest of `updatedAt`, `lastTurn.startedAt`, and `lastTurn.completedAt`; it intentionally does not use `lastEventAt`, which is local observer timing.
 
 `GET /status` returns this shape:
 

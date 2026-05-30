@@ -189,6 +189,7 @@ function parseFilters(url: URL): AgentFilters {
   const status = url.searchParams.get("status");
   const kind = url.searchParams.get("kind");
   const cwd = url.searchParams.get("cwd");
+  const activeWithinMs = readPositiveNumber(url.searchParams.get("activeWithinMs"));
   if (status) {
     filters.status = status as AgentFilters["status"];
   }
@@ -198,7 +199,18 @@ function parseFilters(url: URL): AgentFilters {
   if (cwd) {
     filters.cwd = cwd;
   }
+  if (activeWithinMs !== null) {
+    filters.activeWithinMs = activeWithinMs;
+  }
   return filters;
+}
+
+function readPositiveNumber(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function parseRequestUrl(value: string): URL | null {

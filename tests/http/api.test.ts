@@ -121,6 +121,25 @@ test("GET /status and /agents return snapshots", async () => {
   });
 });
 
+test("GET /agents filters by activeWithinMs and composes with status", async () => {
+  await withServer(async (baseUrl, store) => {
+    const oldWorking = thread("old-work", { type: "active", activeFlags: [] });
+    oldWorking.updatedAt = 100;
+    const recentWorking = thread("recent-work", { type: "active", activeFlags: [] });
+    recentWorking.updatedAt = 900;
+    const recentIdle = thread("recent-idle", { type: "idle" });
+    recentIdle.updatedAt = 950;
+    store.replaceThreads([oldWorking, recentWorking, recentIdle]);
+
+    const agents = await (await fetch(`${baseUrl}/agents?status=working&activeWithinMs=200`)).json();
+
+    assert.deepEqual(
+      agents.map((agent: { id: string }) => agent.id),
+      ["recent-work"],
+    );
+  });
+});
+
 test("GET /agents/:id returns one agent or JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const found = await fetch(`${baseUrl}/agents/idle-1`);

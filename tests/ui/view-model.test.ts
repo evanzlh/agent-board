@@ -80,6 +80,34 @@ test("filterAgents treats all and empty filters as no filter", () => {
   );
 });
 
+test("filterAgents filters by active window using thread and turn timestamps", () => {
+  const agents = [
+    {
+      ...baseAgent,
+      id: "old",
+      updatedAt: 1780010000000,
+      lastTurn: { status: "completed", startedAt: 1780010000000, completedAt: 1780010010000 },
+    },
+    {
+      ...baseAgent,
+      id: "recent-thread",
+      updatedAt: 1780010095000,
+      lastTurn: null,
+    },
+    {
+      ...baseAgent,
+      id: "recent-turn",
+      updatedAt: 1780010000000,
+      lastTurn: { status: "completed", startedAt: 1780010090000, completedAt: 1780010092500 },
+    },
+  ];
+
+  assert.deepEqual(
+    filterAgents(agents, { activeWithinMs: 10_000 }, 1780010100000).map((agent) => agent.id),
+    ["recent-thread", "recent-turn"],
+  );
+});
+
 test("formatTimestamp renders numbers and falls back for nullish values", () => {
   assert.equal(formatTimestamp(null), EMPTY_VALUE);
   assert.equal(formatTimestamp(undefined), EMPTY_VALUE);

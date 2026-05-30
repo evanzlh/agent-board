@@ -126,7 +126,12 @@ select {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(130px, 0.7fr) minmax(150px, 0.8fr) minmax(180px, 1fr) minmax(220px, 1.4fr);
+  grid-template-columns:
+    minmax(120px, 0.65fr)
+    minmax(140px, 0.75fr)
+    minmax(140px, 0.75fr)
+    minmax(170px, 1fr)
+    minmax(220px, 1.4fr);
   gap: 10px;
   margin-top: 12px;
   padding: 12px;

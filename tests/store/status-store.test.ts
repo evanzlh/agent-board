@@ -59,6 +59,24 @@ test("filters agents by status, kind, and cwd", () => {
   assert.deepEqual(store.getAgents({ cwd: "/repo" }).map((agent) => agent.id), ["idle-1"]);
 });
 
+test("filters agents by activity within a time window", () => {
+  const store = new StatusStore({ staleAfterMs: 30_000, now: () => 10_000 });
+  const old = thread("old", { type: "idle" });
+  old.updatedAt = 1_000;
+  const recentByThreadUpdate = thread("recent-thread", { type: "idle" });
+  recentByThreadUpdate.updatedAt = 9_500;
+  const recentByTurn = thread("recent-turn", { type: "notLoaded" });
+  recentByTurn.updatedAt = 1_000;
+  recentByTurn.turns = [{ status: "completed", startedAt: 9_000, completedAt: 9_250 }];
+
+  store.replaceThreads([old, recentByThreadUpdate, recentByTurn]);
+
+  assert.deepEqual(
+    store.getAgents({ activeWithinMs: 1_000 }).map((agent) => agent.id),
+    ["recent-thread", "recent-turn"],
+  );
+});
+
 test("updates a single thread and emits agent.updated", () => {
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => 1000 });
   const events: unknown[] = [];

@@ -16,6 +16,7 @@ const state = {
   filters: {
     status: "all",
     kind: "all",
+    activeWithinMs: "all",
     cwd: "",
     search: "",
   },
@@ -37,6 +38,7 @@ const elements = {
   generatedAt: requiredElement("generated-at"),
   statusFilter: requiredElement("status-filter"),
   kindFilter: requiredElement("kind-filter"),
+  activeWithinFilter: requiredElement("active-within-filter"),
   cwdFilter: requiredElement("cwd-filter"),
   searchFilter: requiredElement("search-filter"),
   autoRefresh: requiredElement("auto-refresh"),
@@ -66,6 +68,10 @@ function wireControls() {
   });
   elements.kindFilter.addEventListener("change", () => {
     state.filters.kind = elements.kindFilter.value;
+    renderTable();
+  });
+  elements.activeWithinFilter.addEventListener("change", () => {
+    state.filters.activeWithinMs = elements.activeWithinFilter.value;
     renderTable();
   });
   elements.cwdFilter.addEventListener("input", () => {
@@ -210,7 +216,7 @@ function renderSummary() {
 }
 
 function renderTable() {
-  const visibleAgents = filterAgents(state.agents, state.filters);
+  const visibleAgents = filterAgents(state.agents, state.filters, state.generatedAt ?? Date.now());
   elements.visibleCount.textContent = `${visibleAgents.length} agent${visibleAgents.length === 1 ? "" : "s"}`;
   elements.generatedAt.textContent = state.generatedAt
     ? `snapshot ${formatTimestamp(state.generatedAt)}`
