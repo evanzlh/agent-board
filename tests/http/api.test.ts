@@ -234,7 +234,16 @@ test("GET /ui serves the Web frontend HTML", async () => {
     assert.equal(bare.status, 200);
     assert.equal(bare.headers.get("content-type"), "text/html; charset=utf-8");
     assert.equal(bare.headers.get("cache-control"), "no-cache");
-    assert.match(await bare.text(), /<title>Codex Status<\/title>/);
+    const html = await bare.text();
+    assert.match(html, /<title>Codex Status<\/title>/);
+    assert.match(html, /<option value="1800000">30min<\/option>/);
+    assert.match(html, /<option value="10800000">3h<\/option>/);
+    assert.match(html, /<option value="43200000">12h<\/option>/);
+    assert.match(html, /<option value="86400000">24h<\/option>/);
+    assert.match(html, /<option value="604800000">7days<\/option>/);
+    assert.equal(html.includes('<option value="300000">5m</option>'), false);
+    assert.equal(html.includes('<option value="900000">15m</option>'), false);
+    assert.equal(html.includes('<option value="3600000">1h</option>'), false);
 
     const slash = await fetch(`${baseUrl}/ui/`);
     assert.equal(slash.status, 200);

@@ -112,7 +112,7 @@ Filter examples:
 curl "http://127.0.0.1:17345/agents?status=waiting_approval"
 curl "http://127.0.0.1:17345/agents?kind=sub_agent"
 curl "http://127.0.0.1:17345/agents?cwd=/home/wh/my_project/codex_status"
-curl "http://127.0.0.1:17345/agents?status=working&activeWithinMs=300000"
+curl "http://127.0.0.1:17345/agents?status=working&activeWithinMs=1800000"
 ```
 
 `activeWithinMs` filters agents whose latest App Server activity is within the provided millisecond window. Activity time is computed from the newest of `updatedAt`, `lastTurn.startedAt`, and `lastTurn.completedAt`; it intentionally does not use `lastEventAt`, which is local observer timing.
