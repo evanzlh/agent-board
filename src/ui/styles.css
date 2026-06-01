@@ -293,8 +293,14 @@ select {
 }
 
 .office-agent.is-stale {
-  filter: grayscale(0.75);
-  opacity: 0.68;
+  border-color: #7b8794;
+  background: #f7f8fa;
+  box-shadow: inset 0 -6px 0 #e2e6eb;
+}
+
+.office-agent.is-stale .office-agent__avatar,
+.office-agent.is-stale .office-agent__desk {
+  filter: grayscale(0.85);
 }
 
 .office-agent[data-role="lead"] {
@@ -462,7 +468,8 @@ select {
 }
 
 .office-agent[data-status="error"] .office-agent__monitor {
-  animation: office-error-blink 1s steps(2, end) infinite;
+  border-color: #7b211c;
+  box-shadow: inset 0 0 0 3px #f58b82;
 }
 
 @keyframes office-monitor-pulse {
@@ -495,22 +502,11 @@ select {
   }
 }
 
-@keyframes office-error-blink {
-  0%,
-  100% {
-    background: #ffd7d2;
-  }
-  50% {
-    background: #f58b82;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .office-agent[data-status="working"] .office-agent__monitor,
   .office-agent[data-status="working"] .office-agent__arm--right,
   .office-agent[data-status="waiting_approval"] .office-agent__bubble,
-  .office-agent[data-status="waiting_input"] .office-agent__bubble,
-  .office-agent[data-status="error"] .office-agent__monitor {
+  .office-agent[data-status="waiting_input"] .office-agent__bubble {
     animation: none;
   }
 }
@@ -754,8 +750,10 @@ tbody tr.is-expanded {
 
 .office-detail h2 {
   margin: 0 0 10px;
+  min-width: 0;
   font-size: 15px;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .office-detail__meta {
