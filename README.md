@@ -87,11 +87,14 @@ It includes:
 - App Server connection line with mode, CLI version, daemon version, last load time, and refresh state.
 - Summary counters for total, working, idle, finished, approval-waiting, input-waiting, error, and unknown agents.
 - Filterable table by status, kind, active time window, working directory, or free-text search.
+- A `Table` / `Office` switch, where Office renders filtered agents as pixel-style team pods.
 - Parent rows with collapsed sub-agent groups by default when Codex exposes a parent thread link.
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`.
 - Expandable per-agent JSON details for debugging raw status and timestamps.
 
 The UI polls `/health` and `/status` every three seconds when auto-refresh is enabled.
+
+The Office view uses the same filters as the table. To keep the animated scene focused on current activity, set `Active within` to a recent window such as `30min` or `3h`.
 
 ## HTTP API
 
