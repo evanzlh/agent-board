@@ -403,6 +403,50 @@ test("applies thread status changed notifications and emits agent.updated", () =
   });
 });
 
+test("applies permissions approval request notifications", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 5000, now: () => now });
+  const events: unknown[] = [];
+  store.replaceThreads([thread("one", { type: "active", activeFlags: [] })]);
+  store.on("event", (event) => events.push(event));
+
+  now = 2000;
+  store.applyNotification({
+    method: "item/permissions/requestApproval",
+    params: { threadId: "one", callId: "call-1" },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "waiting_approval");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: ["waitingOnApproval"] });
+  assert.equal(agent?.waitingSince, 2000);
+  assert.equal(agent?.lastEventAt, 2000);
+  assert.deepEqual(events.at(-1), {
+    type: "agent.updated",
+    agentId: "one",
+    status: "waiting_approval",
+    at: 2000,
+  });
+});
+
+test("resolved server request clears waiting approval evidence", () => {
+  let now = 1000;
+  const store = new StatusStore({ staleAfterMs: 5000, now: () => now });
+  store.replaceThreads([thread("one", { type: "active", activeFlags: ["waitingOnApproval"] })]);
+
+  now = 2000;
+  store.applyNotification({
+    method: "serverRequest/resolved",
+    params: { threadId: "one", callId: "call-1" },
+  });
+
+  const agent = store.getAgent("one");
+  assert.equal(agent?.status, "working");
+  assert.deepEqual(agent?.rawStatus, { type: "active", activeFlags: [] });
+  assert.equal(agent?.waitingSince, null);
+  assert.equal(agent?.lastEventAt, 2000);
+});
+
 test("applies thread started notifications by adding a new agent", () => {
   const store = new StatusStore({ staleAfterMs: 30_000, now: () => 1000 });
 

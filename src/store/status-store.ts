@@ -143,7 +143,17 @@ export class StatusStore extends EventEmitter {
       return;
     }
 
-    if (notification.method === "item/completed" || notification.method === "serverRequest/resolved") {
+    if (notification.method === "item/permissions/requestApproval") {
+      this.#applyPermissionsApprovalRequest(notification.params);
+      return;
+    }
+
+    if (notification.method === "serverRequest/resolved") {
+      this.#clearWaitingRequest(notification.params);
+      return;
+    }
+
+    if (notification.method === "item/completed") {
       this.#touchAgent(notification.params);
     }
   }
@@ -301,6 +311,47 @@ export class StatusStore extends EventEmitter {
       ...current,
       status: options.activeEvidence ? mapThreadStatus(rawStatus, current.lastTurn) : current.status,
       rawStatus,
+      lastEventAt: this.#now(),
+      stale: false,
+    });
+  }
+
+  #applyPermissionsApprovalRequest(params: unknown): void {
+    if (!isObject(params) || typeof params.threadId !== "string") {
+      return;
+    }
+    const current = this.#agents.get(params.threadId);
+    if (!current) {
+      return;
+    }
+    const nextStatus: AgentPublicStatus = "waiting_approval";
+    this.#setAgent({
+      ...current,
+      status: nextStatus,
+      rawStatus: { type: "active", activeFlags: ["waitingOnApproval"] },
+      waitingSince: current.status === nextStatus ? current.waitingSince : this.#now(),
+      lastEventAt: this.#now(),
+      stale: false,
+    });
+  }
+
+  #clearWaitingRequest(params: unknown): void {
+    if (!isObject(params) || typeof params.threadId !== "string") {
+      return;
+    }
+    const current = this.#agents.get(params.threadId);
+    if (!current) {
+      return;
+    }
+    if (current.status !== "waiting_approval" && current.status !== "waiting_input") {
+      this.#touchAgent(params);
+      return;
+    }
+    this.#setAgent({
+      ...current,
+      status: "working",
+      rawStatus: { type: "active", activeFlags: [] },
+      waitingSince: null,
       lastEventAt: this.#now(),
       stale: false,
     });

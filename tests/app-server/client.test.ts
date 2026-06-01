@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AppServerClient } from "../../src/app-server/client.ts";
 
 class FakeRpc extends EventEmitter {
@@ -198,6 +201,171 @@ test("client hydrates recent notLoaded threads so turn evidence is visible", asy
   });
 });
 
+test("client marks unresolved session escalation as waiting approval evidence", async () => {
+  const codexHome = await writeSession(
+    "pending-approval",
+    "2026/06/01",
+    [
+      {
+        timestamp: "2026-06-01T07:39:01.119Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ sandbox_permissions: "require_escalated" }),
+          call_id: "call-1",
+        },
+      },
+    ],
+  );
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "pending-approval",
+        sessionId: "pending-approval",
+        status: { type: "notLoaded" },
+        createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+        updatedAt: Date.parse("2026-06-01T07:39:01.000Z"),
+        turns: [],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "pending-approval",
+      sessionId: "pending-approval",
+      status: { type: "notLoaded" },
+      createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+      updatedAt: Date.parse("2026-06-01T07:39:01.000Z"),
+      turns: [{ status: "interrupted", startedAt: 1780299526, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc);
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, {
+    type: "active",
+    activeFlags: ["waitingOnApproval"],
+  });
+});
+
+test("client ignores resolved session escalation evidence", async () => {
+  const codexHome = await writeSession(
+    "resolved-approval",
+    "2026/06/01",
+    [
+      {
+        timestamp: "2026-06-01T07:39:01.119Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ sandbox_permissions: "require_escalated" }),
+          call_id: "call-1",
+        },
+      },
+      {
+        timestamp: "2026-06-01T07:39:03.119Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call-1",
+          output: "approved command completed",
+        },
+      },
+    ],
+  );
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "resolved-approval",
+        sessionId: "resolved-approval",
+        status: { type: "notLoaded" },
+        createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+        updatedAt: Date.parse("2026-06-01T07:39:03.000Z"),
+        turns: [],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "resolved-approval",
+      sessionId: "resolved-approval",
+      status: { type: "notLoaded" },
+      createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+      updatedAt: Date.parse("2026-06-01T07:39:03.000Z"),
+      turns: [{ status: "interrupted", startedAt: 1780299526, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc);
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, { type: "notLoaded" });
+});
+
+test("client ignores unresolved non-escalated session calls", async () => {
+  const codexHome = await writeSession(
+    "pending-read",
+    "2026/06/01",
+    [
+      {
+        timestamp: "2026-06-01T07:39:01.119Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: JSON.stringify({ cmd: "pwd" }),
+          call_id: "call-1",
+        },
+      },
+    ],
+  );
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "pending-read",
+        sessionId: "pending-read",
+        status: { type: "notLoaded" },
+        createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+        updatedAt: Date.parse("2026-06-01T07:39:01.000Z"),
+        turns: [],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "pending-read",
+      sessionId: "pending-read",
+      status: { type: "notLoaded" },
+      createdAt: Date.parse("2026-06-01T06:04:20.000Z"),
+      updatedAt: Date.parse("2026-06-01T07:39:01.000Z"),
+      turns: [{ status: "interrupted", startedAt: 1780299526, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc);
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, { type: "notLoaded" });
+});
+
 test("client rejects repeated pagination cursors", async () => {
   const rpc = new FakeRpc();
   rpc.respond(
@@ -254,3 +422,20 @@ test("client forwards close events from the RPC transport", () => {
 
   assert.deepEqual(closes, [{ code: 1, signal: null }]);
 });
+
+async function writeSession(
+  threadId: string,
+  sessionDatePath: string,
+  entries: unknown[],
+): Promise<string> {
+  const codexHome = await mkdtemp(join(tmpdir(), "codex-status-"));
+  const sessionDir = join(codexHome, "sessions", ...sessionDatePath.split("/"));
+  await mkdir(sessionDir, { recursive: true });
+  const sessionPath = join(sessionDir, `rollout-2026-06-01T14-04-20-${threadId}.jsonl`);
+  await writeFile(
+    sessionPath,
+    `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
+    "utf8",
+  );
+  return codexHome;
+}

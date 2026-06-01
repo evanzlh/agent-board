@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { applySessionApprovalEvidence } from "./session-evidence.ts";
 import type { AppServerThread } from "../domain/types.ts";
 
 const NOT_LOADED_HYDRATION_LIMIT = 25;
@@ -19,6 +20,7 @@ export type InitialAppServerState = {
 
 export class AppServerClient extends EventEmitter {
   readonly #rpc: RpcLike;
+  #codexHome: string | null = null;
 
   constructor(rpc: RpcLike) {
     super();
@@ -32,13 +34,17 @@ export class AppServerClient extends EventEmitter {
   }
 
   async initialize(): Promise<unknown> {
-    return await this.#rpc.request("initialize", {
+    const response = await this.#rpc.request("initialize", {
       clientInfo: { name: "codex-status", version: "0.1.0" },
       capabilities: {
         experimentalApi: true,
         requestAttestation: false,
       },
     });
+    if (isObject(response) && typeof response.codexHome === "string") {
+      this.#codexHome = response.codexHome;
+    }
+    return response;
   }
 
   async readInitialState(): Promise<InitialAppServerState> {
@@ -46,7 +52,11 @@ export class AppServerClient extends EventEmitter {
     const loadedThreadIds = await this.#readAllLoadedThreadIds();
     const threadIdsToHydrate = selectThreadIdsToHydrate(threads, loadedThreadIds);
     const hydratedThreads = await this.#readThreads(threadIdsToHydrate);
-    return { threads: mergeHydratedThreads(threads, hydratedThreads), loadedThreadIds };
+    const mergedThreads = mergeHydratedThreads(threads, hydratedThreads);
+    const threadsWithSessionEvidence = await applySessionApprovalEvidence(mergedThreads, {
+      codexHome: this.#codexHome,
+    });
+    return { threads: threadsWithSessionEvidence, loadedThreadIds };
   }
 
   async #readAllThreads(): Promise<AppServerThread[]> {
