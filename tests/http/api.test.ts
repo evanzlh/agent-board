@@ -236,6 +236,10 @@ test("GET /ui serves the Web frontend HTML", async () => {
     assert.equal(bare.headers.get("cache-control"), "no-cache");
     const html = await bare.text();
     assert.match(html, /<title>Codex Status<\/title>/);
+    assert.match(html, /id="table-view-button"/);
+    assert.match(html, /id="office-view-button"/);
+    assert.match(html, /id="table-view"/);
+    assert.match(html, /id="office-view"/);
     assert.match(html, /<option value="1800000">30min<\/option>/);
     assert.match(html, /<option value="10800000">3h<\/option>/);
     assert.match(html, /<option value="43200000">12h<\/option>/);

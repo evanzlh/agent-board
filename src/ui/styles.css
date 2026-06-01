@@ -27,7 +27,9 @@ select {
 
 .topbar,
 .filters,
+.view-switch,
 .table-panel,
+.office-panel,
 .error-banner {
   border: 1px solid #cfd8e3;
   border-radius: 8px;
@@ -156,6 +158,55 @@ select {
   background: #ffffff;
   color: #1f2933;
   padding: 0 9px;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+}
+
+.view-switch__button {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #405261;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.view-switch__button:hover {
+  background: #eef4fa;
+}
+
+.view-switch__button.is-active {
+  border-color: #9aa9b8;
+  background: #26384a;
+  color: #ffffff;
+}
+
+.view-panel[hidden] {
+  display: none;
+}
+
+.office-panel {
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.office-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dbe2ea;
+}
+
+.office-body {
+  min-height: 220px;
 }
 
 .table-panel {

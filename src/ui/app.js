@@ -23,6 +23,7 @@ const state = {
   },
   expandedAgentId: null,
   expandedParentIds: new Set(),
+  activeView: "table",
   autoRefreshEnabled: true,
   isLoading: false,
   lastLoadedAt: null,
@@ -38,6 +39,14 @@ const elements = {
   tableBody: requiredElement("agent-table-body"),
   visibleCount: requiredElement("visible-count"),
   generatedAt: requiredElement("generated-at"),
+  tableViewButton: requiredElement("table-view-button"),
+  officeViewButton: requiredElement("office-view-button"),
+  tableView: requiredElement("table-view"),
+  officeView: requiredElement("office-view"),
+  officeVisibleCount: requiredElement("office-visible-count"),
+  officeGeneratedAt: requiredElement("office-generated-at"),
+  officeBody: requiredElement("office-body"),
+  officeDetail: requiredElement("office-detail"),
   statusFilter: requiredElement("status-filter"),
   kindFilter: requiredElement("kind-filter"),
   activeWithinFilter: requiredElement("active-within-filter"),
@@ -57,6 +66,14 @@ setInterval(() => {
 }, REFRESH_INTERVAL_MS);
 
 function wireControls() {
+  elements.tableViewButton.addEventListener("click", () => {
+    state.activeView = "table";
+    renderActiveView();
+  });
+  elements.officeViewButton.addEventListener("click", () => {
+    state.activeView = "office";
+    renderActiveView();
+  });
   elements.refreshButton.addEventListener("click", () => {
     void loadSnapshot();
   });
@@ -66,23 +83,23 @@ function wireControls() {
   });
   elements.statusFilter.addEventListener("change", () => {
     state.filters.status = elements.statusFilter.value;
-    renderTable();
+    renderActiveView();
   });
   elements.kindFilter.addEventListener("change", () => {
     state.filters.kind = elements.kindFilter.value;
-    renderTable();
+    renderActiveView();
   });
   elements.activeWithinFilter.addEventListener("change", () => {
     state.filters.activeWithinMs = elements.activeWithinFilter.value;
-    renderTable();
+    renderActiveView();
   });
   elements.cwdFilter.addEventListener("input", () => {
     state.filters.cwd = elements.cwdFilter.value;
-    renderTable();
+    renderActiveView();
   });
   elements.searchFilter.addEventListener("input", () => {
     state.filters.search = elements.searchFilter.value;
-    renderTable();
+    renderActiveView();
   });
 }
 
@@ -160,7 +177,7 @@ function render() {
   renderHealth();
   renderError();
   renderSummary();
-  renderTable();
+  renderActiveView();
 }
 
 function renderHealth() {
@@ -218,8 +235,28 @@ function renderSummary() {
   );
 }
 
+function renderActiveView() {
+  const isOffice = state.activeView === "office";
+  elements.tableView.hidden = isOffice;
+  elements.officeView.hidden = !isOffice;
+  elements.tableViewButton.classList.toggle("is-active", !isOffice);
+  elements.officeViewButton.classList.toggle("is-active", isOffice);
+  elements.tableViewButton.setAttribute("aria-pressed", String(!isOffice));
+  elements.officeViewButton.setAttribute("aria-pressed", String(isOffice));
+
+  if (isOffice) {
+    renderOffice();
+  } else {
+    renderTable();
+  }
+}
+
+function currentVisibleAgents() {
+  return filterAgents(state.agents, state.filters, state.generatedAt ?? Date.now());
+}
+
 function renderTable() {
-  const visibleAgents = filterAgents(state.agents, state.filters, state.generatedAt ?? Date.now());
+  const visibleAgents = currentVisibleAgents();
   elements.visibleCount.textContent = `${visibleAgents.length} agent${visibleAgents.length === 1 ? "" : "s"}`;
   elements.generatedAt.textContent = state.generatedAt
     ? `snapshot ${formatTimestamp(state.generatedAt)}`
@@ -241,6 +278,21 @@ function renderTable() {
     appendVisibleAgentRows(agentRow, rows);
   }
   elements.tableBody.replaceChildren(...rows);
+}
+
+function renderOffice() {
+  const visibleAgents = currentVisibleAgents();
+  elements.officeVisibleCount.textContent = `${visibleAgents.length} agent${visibleAgents.length === 1 ? "" : "s"}`;
+  elements.officeGeneratedAt.textContent = state.generatedAt
+    ? `snapshot ${formatTimestamp(state.generatedAt)}`
+    : "No snapshot loaded";
+
+  const empty = document.createElement("div");
+  empty.className = "empty-state";
+  empty.textContent = visibleAgents.length === 0 ? "No agents match the filters." : "Office view is loading.";
+  elements.officeBody.replaceChildren(empty);
+  elements.officeDetail.hidden = true;
+  elements.officeDetail.replaceChildren();
 }
 
 function appendVisibleAgentRows(agentRow, rows) {

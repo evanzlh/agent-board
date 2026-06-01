@@ -70,7 +70,16 @@
         </label>
       </section>
 
-      <section class="table-panel" aria-label="Agents">
+      <section class="view-switch" aria-label="Dashboard view">
+        <button id="table-view-button" class="view-switch__button is-active" type="button" aria-pressed="true">
+          Table
+        </button>
+        <button id="office-view-button" class="view-switch__button" type="button" aria-pressed="false">
+          Office
+        </button>
+      </section>
+
+      <section id="table-view" class="table-panel view-panel" aria-label="Agents">
         <div class="table-meta">
           <strong id="visible-count">0 agents</strong>
           <span id="generated-at" class="muted">No snapshot loaded</span>
@@ -97,6 +106,17 @@
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section id="office-view" class="office-panel view-panel" aria-label="Pixel office" hidden>
+        <div class="office-meta">
+          <strong id="office-visible-count">0 agents</strong>
+          <span id="office-generated-at" class="muted">No snapshot loaded</span>
+        </div>
+        <div id="office-body" class="office-body">
+          <div class="empty-state">Loading agents...</div>
+        </div>
+        <aside id="office-detail" class="office-detail" hidden></aside>
       </section>
     </main>
 
