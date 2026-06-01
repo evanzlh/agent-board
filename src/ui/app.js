@@ -1,6 +1,7 @@
 import {
   EMPTY_VALUE,
   buildAgentRows,
+  buildOfficePods,
   compactJson,
   filterAgents,
   formatTimestamp,
@@ -287,12 +288,169 @@ function renderOffice() {
     ? `snapshot ${formatTimestamp(state.generatedAt)}`
     : "No snapshot loaded";
 
-  const empty = document.createElement("div");
-  empty.className = "empty-state";
-  empty.textContent = visibleAgents.length === 0 ? "No agents match the filters." : "Office view is loading.";
-  elements.officeBody.replaceChildren(empty);
-  elements.officeDetail.hidden = true;
-  elements.officeDetail.replaceChildren();
+  if (visibleAgents.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = state.agents.length === 0 ? "No agents loaded." : "No agents match the filters.";
+    elements.officeBody.replaceChildren(empty);
+    elements.officeDetail.hidden = true;
+    elements.officeDetail.replaceChildren();
+    return;
+  }
+
+  elements.officeBody.replaceChildren(...buildOfficePods(visibleAgents).map(renderOfficePod));
+  renderOfficeDetail(visibleAgents);
+}
+
+function renderOfficePod(pod) {
+  const section = document.createElement("section");
+  section.className = "office-pod";
+  section.dataset.podType = pod.type;
+
+  const header = document.createElement("div");
+  header.className = "office-pod__header";
+
+  const title = document.createElement("div");
+  title.className = "office-pod__title";
+  title.textContent = officePodTitle(pod);
+  title.title = title.textContent;
+
+  const count = document.createElement("span");
+  count.className = "office-pod__count";
+  count.textContent = `${pod.children.length} sub`;
+
+  header.append(title, count);
+  section.append(header);
+
+  const desks = document.createElement("div");
+  desks.className = "office-desks";
+  if (pod.agent) {
+    desks.append(renderOfficeAgent(pod.agent, "lead"));
+  }
+  for (const child of pod.children) {
+    desks.append(renderOfficeAgent(child, "sub"));
+  }
+  section.append(desks);
+
+  return section;
+}
+
+function officePodTitle(pod) {
+  if (pod.agent) {
+    return valueOrEmpty(pod.agent.displayName);
+  }
+  if (pod.type === "unassigned") {
+    return "Unassigned Sub Agents";
+  }
+  return "Other Agents";
+}
+
+function renderOfficeAgent(agent, role) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "office-agent";
+  button.dataset.status = valueOrEmpty(agent.status);
+  button.dataset.role = role;
+  button.dataset.kind = valueOrEmpty(agent.kind);
+  if (agent.stale) {
+    button.classList.add("is-stale");
+  }
+  if (state.expandedAgentId === agent.id) {
+    button.classList.add("is-selected");
+  }
+  button.title = `${valueOrEmpty(agent.displayName)} · ${valueOrEmpty(agent.status)} · ${valueOrEmpty(agent.cwd)}`;
+  button.setAttribute("aria-label", button.title);
+  button.addEventListener("click", () => {
+    state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
+    renderActiveView();
+  });
+
+  const bubble = document.createElement("span");
+  bubble.className = "office-agent__bubble";
+  bubble.textContent = officeAgentBubble(agent.status);
+
+  const avatar = document.createElement("span");
+  avatar.className = "office-agent__avatar";
+  avatar.append(
+    span("office-agent__head", ""),
+    span("office-agent__body", ""),
+    span("office-agent__arm office-agent__arm--left", ""),
+    span("office-agent__arm office-agent__arm--right", ""),
+  );
+
+  const desk = document.createElement("span");
+  desk.className = "office-agent__desk";
+  desk.append(span("office-agent__monitor", ""), span("office-agent__keyboard", ""));
+
+  const label = document.createElement("span");
+  label.className = "office-agent__label";
+  label.textContent = valueOrEmpty(agent.displayName);
+
+  const status = document.createElement("span");
+  status.className = "office-agent__status";
+  status.textContent = valueOrEmpty(agent.status);
+
+  button.append(bubble, avatar, desk, label, status);
+  return button;
+}
+
+function officeAgentBubble(status) {
+  if (status === "waiting_approval") {
+    return "approve";
+  }
+  if (status === "waiting_input") {
+    return "input?";
+  }
+  if (status === "error") {
+    return "!";
+  }
+  if (status === "finished") {
+    return "done";
+  }
+  return "";
+}
+
+function renderOfficeDetail(visibleAgents) {
+  const selected = visibleAgents.find((agent) => agent.id === state.expandedAgentId);
+  if (!selected) {
+    elements.officeDetail.hidden = true;
+    elements.officeDetail.replaceChildren();
+    return;
+  }
+
+  elements.officeDetail.hidden = false;
+  const title = document.createElement("h2");
+  title.textContent = valueOrEmpty(selected.displayName);
+
+  const meta = document.createElement("dl");
+  meta.className = "office-detail__meta";
+  meta.append(
+    detailPair("status", selected.status),
+    detailPair("kind", selected.kind),
+    detailPair("lastTurn", selected.lastTurn?.status),
+    detailPair("updatedAt", formatTimestamp(selected.updatedAt)),
+    detailPair("cwd", selected.cwd),
+    detailPair("id", selected.id),
+  );
+
+  elements.officeDetail.replaceChildren(title, meta);
+}
+
+function detailPair(label, value) {
+  const fragment = document.createDocumentFragment();
+  const term = document.createElement("dt");
+  term.textContent = label;
+  const description = document.createElement("dd");
+  description.textContent = valueOrEmpty(value);
+  fragment.append(term, description);
+  return fragment;
+}
+
+function span(className, text) {
+  const element = document.createElement("span");
+  element.className = className;
+  element.textContent = text;
+  return element;
 }
 
 function appendVisibleAgentRows(agentRow, rows) {
