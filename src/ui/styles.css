@@ -216,6 +216,14 @@ tbody tr.is-expanded {
   background: #eef6ff;
 }
 
+.agent-row.is-child-agent:not(.is-stale) td {
+  background: #fbfdff;
+}
+
+.agent-row.is-child-agent:not(.is-stale):hover td {
+  background: #f2f7fb;
+}
+
 .agent-row.is-stale td {
   background: #fff8ed;
 }
@@ -289,6 +297,66 @@ tbody tr.is-expanded {
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.agent-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-name .cell-truncate {
+  min-width: 0;
+}
+
+.agent-name--child {
+  padding-left: calc(var(--agent-depth, 1) * 18px);
+}
+
+.agent-name--orphan {
+  padding-left: 8px;
+}
+
+.hierarchy-marker {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid #c7d2df;
+  border-radius: 999px;
+  padding: 0 6px;
+  color: #526679;
+  background: #f5f8fb;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hierarchy-toggle {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #aebccd;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #26384a;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hierarchy-toggle:hover {
+  background: #eef4fa;
+  border-color: #8798aa;
+}
+
+.hierarchy-toggle:focus-visible {
+  outline: 2px solid #4d8fcc;
+  outline-offset: 2px;
 }
 
 .cell-truncate {

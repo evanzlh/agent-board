@@ -87,6 +87,7 @@ It includes:
 - App Server connection line with mode, CLI version, daemon version, last load time, and refresh state.
 - Summary counters for total, working, idle, finished, approval-waiting, input-waiting, error, and unknown agents.
 - Filterable table by status, kind, active time window, working directory, or free-text search.
+- Parent rows with collapsed sub-agent groups by default when Codex exposes a parent thread link.
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`.
 - Expandable per-agent JSON details for debugging raw status and timestamps.
 

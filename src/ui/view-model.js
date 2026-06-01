@@ -27,6 +27,42 @@ export function filterAgents(agents, filters = {}, nowMs = Date.now()) {
   });
 }
 
+export function buildAgentRows(agents) {
+  const byId = new Map(agents.map((agent) => [agent.id, agent]));
+  const childrenByParent = new Map();
+
+  for (const agent of agents) {
+    const parentId = visibleParentId(agent, byId);
+    if (!parentId) {
+      continue;
+    }
+    const children = childrenByParent.get(parentId) ?? [];
+    children.push(agent);
+    childrenByParent.set(parentId, children);
+  }
+
+  const rootIds = [];
+  const seenRoots = new Set();
+  for (const agent of agents) {
+    const root = findVisibleRoot(agent, byId);
+    if (!seenRoots.has(root.id)) {
+      seenRoots.add(root.id);
+      rootIds.push(root.id);
+    }
+  }
+
+  const rows = [];
+  const emitted = new Set();
+  for (const rootId of rootIds) {
+    const root = byId.get(rootId);
+    if (root && !emitted.has(root.id)) {
+      rows.push(buildAgentRow(root, 0, childrenByParent, emitted));
+    }
+  }
+
+  return rows;
+}
+
 export function formatTimestamp(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return EMPTY_VALUE;
@@ -68,6 +104,56 @@ export function safeJson(value) {
   } catch (error) {
     return `[unserializable: ${error instanceof Error ? error.message : String(error)}]`;
   }
+}
+
+function buildAgentRow(agent, depth, childrenByParent, emitted) {
+  emitted.add(agent.id);
+  const children = [];
+  for (const child of childrenByParent.get(agent.id) ?? []) {
+    if (!emitted.has(child.id)) {
+      children.push(buildAgentRow(child, depth + 1, childrenByParent, emitted));
+    }
+  }
+
+  return {
+    agent,
+    depth,
+    relationship: rowRelationship(agent, depth),
+    children,
+  };
+}
+
+function rowRelationship(agent, depth) {
+  if (depth > 0) {
+    return "child";
+  }
+  const hasMissingParent =
+    agent.kind === "sub_agent" && valueOrEmpty(agent.parentThreadId) !== EMPTY_VALUE;
+  return hasMissingParent ? "orphan" : "root";
+}
+
+function findVisibleRoot(agent, byId) {
+  let root = agent;
+  const seen = new Set([agent.id]);
+  let parentId = visibleParentId(root, byId);
+  while (parentId && !seen.has(parentId)) {
+    const parent = byId.get(parentId);
+    if (!parent) {
+      break;
+    }
+    root = parent;
+    seen.add(parent.id);
+    parentId = visibleParentId(root, byId);
+  }
+  return root;
+}
+
+function visibleParentId(agent, byId) {
+  const parentId =
+    typeof agent.parentThreadId === "string" && agent.parentThreadId.length > 0
+      ? agent.parentThreadId
+      : null;
+  return parentId && parentId !== agent.id && byId.has(parentId) ? parentId : null;
 }
 
 function normalizeFilter(value) {

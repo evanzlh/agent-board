@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   EMPTY_VALUE,
+  buildAgentRows,
   compactJson,
   filterAgents,
   formatTimestamp,
@@ -108,6 +109,54 @@ test("filterAgents filters by active window using thread and turn timestamps", (
   );
 });
 
+test("buildAgentRows nests visible sub agents under their parent rows", () => {
+  const parent = {
+    ...baseAgent,
+    id: "main-1",
+    kind: "main_agent",
+    parentThreadId: null,
+  };
+  const child = {
+    ...baseAgent,
+    id: "sub-1",
+    kind: "sub_agent",
+    parentThreadId: "main-1",
+  };
+  const other = {
+    ...baseAgent,
+    id: "main-2",
+    kind: "main_agent",
+    parentThreadId: null,
+  };
+
+  assert.deepEqual(
+    summarizeAgentRows(buildAgentRows([child, parent, other])),
+    [
+      {
+        id: "main-1",
+        depth: 0,
+        relationship: "root",
+        children: [{ id: "sub-1", depth: 1, relationship: "child", children: [] }],
+      },
+      { id: "main-2", depth: 0, relationship: "root", children: [] },
+    ],
+  );
+});
+
+test("buildAgentRows keeps sub agents visible when their parent is filtered out", () => {
+  const child = {
+    ...baseAgent,
+    id: "sub-orphan",
+    kind: "sub_agent",
+    parentThreadId: "missing-main",
+  };
+
+  assert.deepEqual(
+    summarizeAgentRows(buildAgentRows([child])),
+    [{ id: "sub-orphan", depth: 0, relationship: "orphan", children: [] }],
+  );
+});
+
 test("formatTimestamp renders numbers and falls back for nullish values", () => {
   assert.equal(formatTimestamp(null), EMPTY_VALUE);
   assert.equal(formatTimestamp(undefined), EMPTY_VALUE);
@@ -133,3 +182,12 @@ test("valueOrEmpty trims strings and handles missing values", () => {
   assert.equal(valueOrEmpty(""), EMPTY_VALUE);
   assert.equal(valueOrEmpty(null), EMPTY_VALUE);
 });
+
+function summarizeAgentRows(rows) {
+  return rows.map((row) => ({
+    id: row.agent.id,
+    depth: row.depth,
+    relationship: row.relationship,
+    children: summarizeAgentRows(row.children),
+  }));
+}

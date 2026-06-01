@@ -1,5 +1,6 @@
 import {
   EMPTY_VALUE,
+  buildAgentRows,
   compactJson,
   filterAgents,
   formatTimestamp,
@@ -21,6 +22,7 @@ const state = {
     search: "",
   },
   expandedAgentId: null,
+  expandedParentIds: new Set(),
   autoRefreshEnabled: true,
   isLoading: false,
   lastLoadedAt: null,
@@ -113,6 +115,7 @@ async function loadSnapshot() {
       if (state.expandedAgentId && !state.agents.some((agent) => agent.id === state.expandedAgentId)) {
         state.expandedAgentId = null;
       }
+      pruneExpandedParentIds();
     } else {
       errors.push(`status: ${readError(statusResult.reason)}`);
     }
@@ -234,20 +237,49 @@ function renderTable() {
   }
 
   const rows = [];
-  for (const agent of visibleAgents) {
-    rows.push(renderAgentRow(agent));
-    if (agent.id === state.expandedAgentId) {
-      rows.push(renderDetailRow(agent));
-    }
+  for (const agentRow of buildAgentRows(visibleAgents)) {
+    appendVisibleAgentRows(agentRow, rows);
   }
   elements.tableBody.replaceChildren(...rows);
 }
 
-function renderAgentRow(agent) {
+function appendVisibleAgentRows(agentRow, rows) {
+  const agent = agentRow.agent;
+  rows.push(renderAgentRow(agentRow));
+  if (agent.id === state.expandedAgentId) {
+    rows.push(renderDetailRow(agent));
+  }
+
+  if (!state.expandedParentIds.has(agent.id)) {
+    return;
+  }
+
+  for (const childRow of agentRow.children) {
+    appendVisibleAgentRows(childRow, rows);
+  }
+}
+
+function renderAgentRow(agentRow) {
+  const { agent } = agentRow;
   const row = document.createElement("tr");
   row.className = "agent-row";
+  row.dataset.depth = String(agentRow.depth);
+  row.dataset.relationship = agentRow.relationship;
+  row.dataset.childCount = String(agentRow.children.length);
   if (agent.id === state.expandedAgentId) {
     row.classList.add("is-expanded");
+  }
+  if (agentRow.children.length > 0) {
+    row.classList.add("has-sub-agents");
+  }
+  if (state.expandedParentIds.has(agent.id)) {
+    row.classList.add("is-subtree-expanded");
+  }
+  if (agentRow.relationship === "child") {
+    row.classList.add("is-child-agent");
+  }
+  if (agentRow.relationship === "orphan") {
+    row.classList.add("is-orphan-sub-agent");
   }
   if (agent.stale) {
     row.classList.add("is-stale");
@@ -260,7 +292,7 @@ function renderAgentRow(agent) {
   row.append(
     cell(renderStatus(agent.status, agent.stale)),
     textCell(agent.kind),
-    textCell(agent.displayName),
+    cell(renderName(agentRow)),
     textCell(compactJson(agent.rawStatus), "json-inline"),
     textCell(agent.lastTurn?.status),
     textCell(formatTimestamp(agent.waitingSince)),
@@ -269,6 +301,66 @@ function renderAgentRow(agent) {
     textCell(agent.id, "json-inline"),
   );
   return row;
+}
+
+function renderName(agentRow) {
+  const { agent } = agentRow;
+  const wrap = document.createElement("span");
+  wrap.className = "agent-name";
+  if (agentRow.children.length > 0) {
+    wrap.append(renderHierarchyToggle(agentRow));
+  }
+  if (agentRow.relationship === "child") {
+    wrap.classList.add("agent-name--child");
+    wrap.style.setProperty("--agent-depth", String(Math.min(agentRow.depth, 4)));
+    wrap.append(hierarchyMarker("sub"));
+  } else if (agentRow.relationship === "orphan") {
+    wrap.classList.add("agent-name--orphan");
+    wrap.append(hierarchyMarker("orphan"));
+  }
+
+  const name = document.createElement("span");
+  name.className = "cell-truncate";
+  name.textContent = valueOrEmpty(agent.displayName);
+  name.title = name.textContent;
+  wrap.append(name);
+  if (agentRow.children.length > 0) {
+    wrap.append(hierarchyMarker(`${agentRow.children.length} sub`));
+  }
+  return wrap;
+}
+
+function renderHierarchyToggle(agentRow) {
+  const { agent } = agentRow;
+  const expanded = state.expandedParentIds.has(agent.id);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "hierarchy-toggle";
+  button.textContent = expanded ? "-" : "+";
+  button.setAttribute("aria-expanded", String(expanded));
+  button.setAttribute(
+    "aria-label",
+    `${expanded ? "Hide" : "Show"} ${agentRow.children.length} sub agent${
+      agentRow.children.length === 1 ? "" : "s"
+    } for ${valueOrEmpty(agent.displayName)}`,
+  );
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (state.expandedParentIds.has(agent.id)) {
+      state.expandedParentIds.delete(agent.id);
+    } else {
+      state.expandedParentIds.add(agent.id);
+    }
+    renderTable();
+  });
+  return button;
+}
+
+function hierarchyMarker(label) {
+  const marker = document.createElement("span");
+  marker.className = "hierarchy-marker";
+  marker.textContent = label;
+  return marker;
 }
 
 function renderDetailRow(agent) {
@@ -317,4 +409,13 @@ function cell(child) {
 
 function readError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function pruneExpandedParentIds() {
+  const currentAgentIds = new Set(state.agents.map((agent) => agent.id));
+  for (const id of state.expandedParentIds) {
+    if (!currentAgentIds.has(id)) {
+      state.expandedParentIds.delete(id);
+    }
+  }
 }
