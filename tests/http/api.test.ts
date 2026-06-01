@@ -303,6 +303,20 @@ test("GET /ui assets render main office pod status in headers", async () => {
   });
 });
 
+test("GET /ui assets render sub agents as subordinate office workers", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(script, /office-pod__lead-station/);
+    assert.match(script, /office-pod__team-grid/);
+    assert.match(styles, /\.office-pod__lead-station/);
+    assert.match(styles, /\.office-pod__team-grid/);
+    assert.match(styles, /\.office-pod__team-grid \{[^}]*overflow: auto;/);
+    assert.match(styles, /\.office-agent\[data-role="sub"\]/);
+  });
+});
+
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const paths = [

@@ -336,10 +336,22 @@ function renderOfficePod(pod) {
   const desks = document.createElement("div");
   desks.className = "office-desks";
   if (pod.agent) {
-    desks.append(renderOfficeAgent(pod.agent, "lead"));
+    const leadStation = document.createElement("div");
+    leadStation.className = "office-pod__lead-station";
+    leadStation.append(renderOfficeAgent(pod.agent, "lead"));
+    desks.append(leadStation);
+  }
+
+  const teamGrid = document.createElement("div");
+  teamGrid.className = "office-pod__team-grid";
+  if (!pod.agent) {
+    teamGrid.classList.add("office-pod__team-grid--standalone");
   }
   for (const child of pod.children) {
-    desks.append(renderOfficeAgent(child, "sub"));
+    teamGrid.append(renderOfficeAgent(child, "sub"));
+  }
+  if (pod.children.length > 0) {
+    desks.append(teamGrid);
   }
   section.append(desks);
 
