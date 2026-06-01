@@ -346,12 +346,14 @@ function renderHierarchyToggle(agentRow) {
   );
   button.addEventListener("click", (event) => {
     event.stopPropagation();
+    const scrollPosition = captureScrollPosition();
     if (state.expandedParentIds.has(agent.id)) {
       state.expandedParentIds.delete(agent.id);
     } else {
       state.expandedParentIds.add(agent.id);
     }
     renderTable();
+    restoreScrollPosition(scrollPosition);
   });
   return button;
 }
@@ -409,6 +411,25 @@ function cell(child) {
 
 function readError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function captureScrollPosition() {
+  const tableWrap = elements.tableBody.closest(".table-wrap");
+  return {
+    windowX: window.scrollX,
+    windowY: window.scrollY,
+    tableScrollLeft: tableWrap?.scrollLeft ?? 0,
+    tableScrollTop: tableWrap?.scrollTop ?? 0,
+  };
+}
+
+function restoreScrollPosition(position) {
+  const tableWrap = elements.tableBody.closest(".table-wrap");
+  if (tableWrap) {
+    tableWrap.scrollLeft = position.tableScrollLeft;
+    tableWrap.scrollTop = position.tableScrollTop;
+  }
+  window.scrollTo(position.windowX, position.windowY);
 }
 
 function pruneExpandedParentIds() {
