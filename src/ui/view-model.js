@@ -101,9 +101,7 @@ export function buildOfficePods(agents) {
       continue;
     }
 
-    if (!visibleParentId(agent, byId)) {
-      otherAgents.push(agent);
-    }
+    otherAgents.push(agent);
   }
 
   const groupedPods = [];

@@ -275,6 +275,34 @@ test("GET /ui static assets use explicit content types", async () => {
   });
 });
 
+test("GET /ui styles disable stale office animations", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/ui/styles.css`);
+    assert.equal(response.status, 200);
+    const styles = await response.text();
+
+    assert.match(
+      styles,
+      /\.office-agent\.is-stale\[data-status="working"\] \.office-agent__monitor,[\s\S]*?animation: none;/,
+    );
+    assert.match(
+      styles,
+      /\.office-agent\.is-stale\[data-status="waiting_approval"\] \.office-agent__bubble,[\s\S]*?animation: none;/,
+    );
+  });
+});
+
+test("GET /ui assets render main office pod status in headers", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(script, /office-pod__status/);
+    assert.match(script, /pod\.agent\.status/);
+    assert.match(styles, /\.office-pod__status/);
+  });
+});
+
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const paths = [

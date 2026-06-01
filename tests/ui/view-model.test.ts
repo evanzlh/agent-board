@@ -231,7 +231,7 @@ test("buildOfficePods groups rootless unknown agents into an other pod", () => {
   ]);
 });
 
-test("buildOfficePods excludes non-sub agents with visible main parents from grouped pods", () => {
+test("buildOfficePods keeps non-sub agents with visible parents in the other pod", () => {
   const parent = {
     ...baseAgent,
     id: "main-1",
@@ -255,7 +255,7 @@ test("buildOfficePods excludes non-sub agents with visible main parents from gro
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([nestedUnknown, parent, rootlessUnknown])), [
-    { id: "other-agents", type: "other", agentId: null, children: ["unknown-rootless"] },
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-nested", "unknown-rootless"] },
     { id: "main-1", type: "main", agentId: "main-1", children: [] },
   ]);
 });

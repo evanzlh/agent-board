@@ -319,7 +319,18 @@ function renderOfficePod(pod) {
   count.className = "office-pod__count";
   count.textContent = `${pod.children.length} sub`;
 
-  header.append(title, count);
+  const badges = document.createElement("div");
+  badges.className = "office-pod__badges";
+  if (pod.agent) {
+    const status = document.createElement("span");
+    status.className = "office-pod__status";
+    status.dataset.status = valueOrEmpty(pod.agent.status);
+    status.textContent = valueOrEmpty(pod.agent.status);
+    badges.append(status);
+  }
+  badges.append(count);
+
+  header.append(title, badges);
   section.append(header);
 
   const desks = document.createElement("div");
