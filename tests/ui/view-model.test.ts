@@ -231,6 +231,35 @@ test("buildOfficePods groups rootless unknown agents into an other pod", () => {
   ]);
 });
 
+test("buildOfficePods excludes non-sub agents with visible main parents from grouped pods", () => {
+  const parent = {
+    ...baseAgent,
+    id: "main-1",
+    kind: "main_agent",
+    displayName: "Main One",
+    parentThreadId: null,
+  };
+  const nestedUnknown = {
+    ...baseAgent,
+    id: "unknown-nested",
+    kind: "unknown",
+    displayName: "Nested Unknown",
+    parentThreadId: "main-1",
+  };
+  const rootlessUnknown = {
+    ...baseAgent,
+    id: "unknown-rootless",
+    kind: "unknown",
+    displayName: "Rootless Unknown",
+    parentThreadId: null,
+  };
+
+  assert.deepEqual(summarizeOfficePods(buildOfficePods([nestedUnknown, parent, rootlessUnknown])), [
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-rootless"] },
+    { id: "main-1", type: "main", agentId: "main-1", children: [] },
+  ]);
+});
+
 test("formatTimestamp renders numbers and falls back for nullish values", () => {
   assert.equal(formatTimestamp(null), EMPTY_VALUE);
   assert.equal(formatTimestamp(undefined), EMPTY_VALUE);

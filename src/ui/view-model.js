@@ -70,6 +70,9 @@ export function buildOfficePods(agents) {
   const otherAgents = [];
 
   for (const agent of agents) {
+    if (agent.kind !== "sub_agent") {
+      continue;
+    }
     const parentId = visibleMainParentId(agent, byId);
     if (!parentId) {
       continue;
@@ -98,7 +101,9 @@ export function buildOfficePods(agents) {
       continue;
     }
 
-    otherAgents.push(agent);
+    if (!visibleParentId(agent, byId)) {
+      otherAgents.push(agent);
+    }
   }
 
   const groupedPods = [];
