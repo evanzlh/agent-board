@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   EMPTY_VALUE,
   buildAgentRows,
+  buildOfficePods,
   compactJson,
   filterAgents,
   formatTimestamp,
@@ -157,6 +158,79 @@ test("buildAgentRows keeps sub agents visible when their parent is filtered out"
   );
 });
 
+test("buildOfficePods groups visible main agents with their sub agents", () => {
+  const parent = {
+    ...baseAgent,
+    id: "main-1",
+    kind: "main_agent",
+    displayName: "Main One",
+    parentThreadId: null,
+  };
+  const child = {
+    ...baseAgent,
+    id: "sub-1",
+    kind: "sub_agent",
+    displayName: "Sub One",
+    parentThreadId: "main-1",
+  };
+  const otherParent = {
+    ...baseAgent,
+    id: "main-2",
+    kind: "main_agent",
+    displayName: "Main Two",
+    parentThreadId: null,
+  };
+
+  assert.deepEqual(summarizeOfficePods(buildOfficePods([child, parent, otherParent])), [
+    { id: "main-1", type: "main", agentId: "main-1", children: ["sub-1"] },
+    { id: "main-2", type: "main", agentId: "main-2", children: [] },
+  ]);
+});
+
+test("buildOfficePods groups visible sub agents without visible parents into an unassigned pod", () => {
+  const child = {
+    ...baseAgent,
+    id: "sub-orphan",
+    kind: "sub_agent",
+    displayName: "Filtered Sub",
+    parentThreadId: "missing-main",
+  };
+  const parent = {
+    ...baseAgent,
+    id: "main-visible",
+    kind: "main_agent",
+    displayName: "Visible Main",
+    parentThreadId: null,
+  };
+
+  assert.deepEqual(summarizeOfficePods(buildOfficePods([child, parent])), [
+    { id: "unassigned-sub-agents", type: "unassigned", agentId: null, children: ["sub-orphan"] },
+    { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+  ]);
+});
+
+test("buildOfficePods groups rootless unknown agents into an other pod", () => {
+  const unknown = {
+    ...baseAgent,
+    id: "unknown-1",
+    kind: "unknown",
+    displayName: "Unknown Agent",
+    parentThreadId: null,
+  };
+  const parent = {
+    ...baseAgent,
+    id: "main-visible",
+    kind: "main_agent",
+    displayName: "Visible Main",
+    parentThreadId: null,
+  };
+
+  assert.deepEqual(summarizeOfficePods(buildOfficePods([unknown, parent])), [
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-1"] },
+    { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+  ]);
+});
+
 test("formatTimestamp renders numbers and falls back for nullish values", () => {
   assert.equal(formatTimestamp(null), EMPTY_VALUE);
   assert.equal(formatTimestamp(undefined), EMPTY_VALUE);
@@ -189,5 +263,14 @@ function summarizeAgentRows(rows) {
     depth: row.depth,
     relationship: row.relationship,
     children: summarizeAgentRows(row.children),
+  }));
+}
+
+function summarizeOfficePods(pods) {
+  return pods.map((pod) => ({
+    id: pod.id,
+    type: pod.type,
+    agentId: pod.agent?.id ?? null,
+    children: pod.children.map((agent) => agent.id),
   }));
 }

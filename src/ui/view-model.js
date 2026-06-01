@@ -63,6 +63,66 @@ export function buildAgentRows(agents) {
   return rows;
 }
 
+export function buildOfficePods(agents) {
+  const byId = new Map(agents.map((agent) => [agent.id, agent]));
+  const childrenByParent = new Map();
+  const unassignedSubAgents = [];
+  const otherAgents = [];
+
+  for (const agent of agents) {
+    const parentId = visibleMainParentId(agent, byId);
+    if (!parentId) {
+      continue;
+    }
+    const children = childrenByParent.get(parentId) ?? [];
+    children.push(agent);
+    childrenByParent.set(parentId, children);
+  }
+
+  const pods = [];
+  for (const agent of agents) {
+    if (agent.kind === "main_agent") {
+      pods.push({
+        id: agent.id,
+        type: "main",
+        agent,
+        children: childrenByParent.get(agent.id) ?? [],
+      });
+      continue;
+    }
+
+    if (agent.kind === "sub_agent") {
+      if (!visibleMainParentId(agent, byId)) {
+        unassignedSubAgents.push(agent);
+      }
+      continue;
+    }
+
+    otherAgents.push(agent);
+  }
+
+  const groupedPods = [];
+  if (unassignedSubAgents.length > 0) {
+    groupedPods.push({
+      id: "unassigned-sub-agents",
+      type: "unassigned",
+      agent: null,
+      children: unassignedSubAgents,
+    });
+  }
+  if (otherAgents.length > 0) {
+    groupedPods.push({
+      id: "other-agents",
+      type: "other",
+      agent: null,
+      children: otherAgents,
+    });
+  }
+  groupedPods.push(...pods);
+
+  return groupedPods;
+}
+
 export function formatTimestamp(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return EMPTY_VALUE;
@@ -154,6 +214,18 @@ function visibleParentId(agent, byId) {
       ? agent.parentThreadId
       : null;
   return parentId && parentId !== agent.id && byId.has(parentId) ? parentId : null;
+}
+
+function visibleMainParentId(agent, byId) {
+  const parentId =
+    typeof agent.parentThreadId === "string" && agent.parentThreadId.length > 0
+      ? agent.parentThreadId
+      : null;
+  if (!parentId || parentId === agent.id) {
+    return null;
+  }
+  const parent = byId.get(parentId);
+  return parent?.kind === "main_agent" ? parentId : null;
 }
 
 function normalizeFilter(value) {
