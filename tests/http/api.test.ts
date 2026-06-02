@@ -377,9 +377,13 @@ test("GET /ui assets render dismissible office status alerts", async () => {
     assert.match(script, /agentStatuses:\s*new Map\(\)/);
     assert.match(script, /officeAlerts:\s*\[\]/);
     assert.match(script, /queueOfficeAlerts\(/);
+    assert.match(script, /renderOfficeAlertSummary/);
     assert.match(script, /renderOfficeAlert/);
+    assert.match(script, /state\.officeAlerts = \[\];/);
     assert.match(script, /state\.officeAlerts = state\.officeAlerts\.filter\(\(item\) => item\.id !== alert\.id\);/);
     assert.match(styles, /\.office-alerts/);
+    assert.match(styles, /\.office-alerts__summary/);
+    assert.match(styles, /\.office-alerts__close-all/);
     assert.match(styles, /\.office-alert/);
     assert.match(styles, /\.office-alert__close/);
   });

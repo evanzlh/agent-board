@@ -530,7 +530,28 @@ function renderOfficeAlerts() {
     elements.officeAlerts.replaceChildren();
     return;
   }
-  elements.officeAlerts.replaceChildren(...state.officeAlerts.map(renderOfficeAlert));
+  elements.officeAlerts.replaceChildren(renderOfficeAlertSummary(), ...state.officeAlerts.map(renderOfficeAlert));
+}
+
+function renderOfficeAlertSummary() {
+  const summary = document.createElement("div");
+  summary.className = "office-alerts__summary";
+
+  const count = document.createElement("span");
+  count.textContent = `${state.officeAlerts.length} alert${state.officeAlerts.length === 1 ? "" : "s"}`;
+
+  const closeAll = document.createElement("button");
+  closeAll.type = "button";
+  closeAll.className = "office-alerts__close-all";
+  closeAll.textContent = "Close all";
+  closeAll.setAttribute("aria-label", "Close all office status alerts");
+  closeAll.addEventListener("click", () => {
+    state.officeAlerts = [];
+    renderOfficeAlerts();
+  });
+
+  summary.append(count, closeAll);
+  return summary;
 }
 
 function renderOfficeAlert(alert) {

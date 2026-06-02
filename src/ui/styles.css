@@ -218,6 +218,44 @@ select {
   pointer-events: none;
 }
 
+.office-alerts__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #b8c3cf;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #405261;
+  padding: 8px 10px;
+  box-shadow: 0 6px 16px rgba(51, 65, 85, 0.16);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
+.office-alerts__close-all {
+  flex: none;
+  min-height: 28px;
+  border: 1px solid #8798aa;
+  border-radius: 5px;
+  background: #26384a;
+  color: #ffffff;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.office-alerts__close-all:hover {
+  background: #1c2a38;
+}
+
+.office-alerts__close-all:focus-visible {
+  outline: 2px solid #4d8fcc;
+  outline-offset: 2px;
+}
+
 .office-alert {
   display: flex;
   align-items: flex-start;
