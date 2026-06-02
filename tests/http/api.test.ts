@@ -351,17 +351,16 @@ test("GET /ui assets preserve scroll when selecting office agents", async () => 
   });
 });
 
-test("GET /ui assets preserve stable office ordering between renders", async () => {
+test("GET /ui assets use simplified office ordering without previous-position state", async () => {
   await withServer(async (baseUrl) => {
     const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
 
-    assert.match(script, /officePodOrder:\s*\[\]/);
-    assert.match(script, /officeAgentOrder:\s*\[\]/);
-    assert.match(
-      script,
-      /buildOfficePods\(visibleAgents,\s*\{\s*previousPodIds:\s*state\.officePodOrder,\s*previousAgentIds:\s*state\.officeAgentOrder,/,
-    );
-    assert.match(script, /rememberOfficeOrder\(pods\);/);
+    assert.doesNotMatch(script, /officePodOrder:\s*\[\]/);
+    assert.doesNotMatch(script, /officeAgentOrder:\s*\[\]/);
+    assert.match(script, /buildOfficePods\(visibleAgents\);/);
+    assert.doesNotMatch(script, /previousPodIds/);
+    assert.doesNotMatch(script, /previousAgentIds/);
+    assert.doesNotMatch(script, /rememberOfficeOrder/);
   });
 });
 

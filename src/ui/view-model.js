@@ -82,13 +82,11 @@ export function buildAgentRows(agents) {
   return rows;
 }
 
-export function buildOfficePods(agents, options = {}) {
+export function buildOfficePods(agents) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   const childrenByParent = new Map();
   const unassignedSubAgents = [];
   const otherAgents = [];
-  const previousPodPositions = previousPositions(options.previousPodIds);
-  const previousAgentPositions = previousPositions(options.previousAgentIds);
 
   for (const agent of agents) {
     if (agent.kind !== "sub_agent") {
@@ -110,7 +108,7 @@ export function buildOfficePods(agents, options = {}) {
         id: agent.id,
         type: "main",
         agent,
-        children: sortOfficeAgents(childrenByParent.get(agent.id) ?? [], previousAgentPositions),
+        children: sortOfficeAgents(childrenByParent.get(agent.id) ?? []),
       });
       continue;
     }
@@ -131,7 +129,7 @@ export function buildOfficePods(agents, options = {}) {
       id: "unassigned-sub-agents",
       type: "unassigned",
       agent: null,
-      children: sortOfficeAgents(unassignedSubAgents, previousAgentPositions),
+      children: sortOfficeAgents(unassignedSubAgents),
     });
   }
   if (otherAgents.length > 0) {
@@ -139,15 +137,12 @@ export function buildOfficePods(agents, options = {}) {
       id: "other-agents",
       type: "other",
       agent: null,
-      children: sortOfficeAgents(otherAgents, previousAgentPositions),
+      children: sortOfficeAgents(otherAgents),
     });
   }
   groupedPods.push(...pods);
 
-  const initialPodPositions = previousPositions(groupedPods.map((pod) => pod.id));
-  return groupedPods.sort((a, b) =>
-    compareOfficePods(a, b, previousPodPositions, initialPodPositions),
-  );
+  return groupedPods.sort(compareOfficePods);
 }
 
 export function formatTimestamp(value) {
@@ -255,25 +250,22 @@ function visibleMainParentId(agent, byId) {
   return parent?.kind === "main_agent" ? parentId : null;
 }
 
-function sortOfficeAgents(agents, previousAgentPositions) {
-  return [...agents].sort((a, b) => compareOfficeAgents(a, b, previousAgentPositions));
+function sortOfficeAgents(agents) {
+  return [...agents].sort(compareOfficeAgents);
 }
 
-function compareOfficePods(a, b, previousPodPositions, initialPodPositions) {
+function compareOfficePods(a, b) {
   return (
     officePodPriority(a) - officePodPriority(b) ||
-    comparePreviousPosition(a.id, b.id, previousPodPositions) ||
-    compareOfficeActivity(a, b) ||
-    comparePreviousPosition(a.id, b.id, initialPodPositions) ||
+    compareOfficePodSortTime(a, b) ||
     a.id.localeCompare(b.id)
   );
 }
 
-function compareOfficeAgents(a, b, previousAgentPositions) {
+function compareOfficeAgents(a, b) {
   return (
     officeAgentPriority(a) - officeAgentPriority(b) ||
-    comparePreviousPosition(a.id, b.id, previousAgentPositions) ||
-    compareAgentActivity(a, b) ||
+    compareOfficeAgentSortTime(a, b) ||
     a.id.localeCompare(b.id)
   );
 }
@@ -283,40 +275,38 @@ function officePodPriority(pod) {
 }
 
 function officeAgentPriority(agent) {
-  if (agent.status === "waiting_approval") {
+  if (agent.status === "working" || agent.status === "waiting_approval") {
     return 0;
   }
-  if (agent.status === "working") {
+  if (agent.status === "finished") {
     return 1;
   }
-  if (agent.status === "waiting_input") {
-    return 2;
-  }
-  if (agent.status === "error") {
+  if (agent.status === "unknown") {
     return 3;
   }
-  if (agent.status === "idle") {
-    return 4;
-  }
-  if (agent.status === "unknown") {
-    return 5;
-  }
-  if (agent.status === "finished") {
-    return 6;
-  }
-  return 7;
+  return 2;
 }
 
-function compareOfficeActivity(a, b) {
-  return officePodActivityAt(b) - officePodActivityAt(a);
+function compareOfficePodSortTime(a, b) {
+  return officePodSortTime(b) - officePodSortTime(a);
 }
 
-function compareAgentActivity(a, b) {
-  return officeAgentActivityAt(b) - officeAgentActivityAt(a);
+function compareOfficeAgentSortTime(a, b) {
+  return officeAgentSortTime(b) - officeAgentSortTime(a);
 }
 
-function officePodActivityAt(pod) {
-  return Math.max(...podAgents(pod).map(officeAgentActivityAt));
+function officePodSortTime(pod) {
+  const priority = officePodPriority(pod);
+  return Math.max(
+    ...podAgents(pod)
+      .filter((agent) => officeAgentPriority(agent) === priority)
+      .map(officeAgentSortTime),
+  );
+}
+
+function officeAgentSortTime(agent) {
+  const createdAt = numberOrNegativeInfinity(agent.createdAt);
+  return createdAt !== Number.NEGATIVE_INFINITY ? createdAt : officeAgentActivityAt(agent);
 }
 
 function officeAgentActivityAt(agent) {
@@ -330,28 +320,6 @@ function officeAgentActivityAt(agent) {
 
 function podAgents(pod) {
   return pod.agent ? [pod.agent, ...pod.children] : pod.children;
-}
-
-function comparePreviousPosition(aId, bId, positions) {
-  const aPosition = positions.get(aId);
-  const bPosition = positions.get(bId);
-  if (aPosition === undefined && bPosition === undefined) {
-    return 0;
-  }
-  return (aPosition ?? Number.MAX_SAFE_INTEGER) - (bPosition ?? Number.MAX_SAFE_INTEGER);
-}
-
-function previousPositions(ids) {
-  const positions = new Map();
-  if (!Array.isArray(ids)) {
-    return positions;
-  }
-  ids.forEach((id, index) => {
-    if (typeof id === "string" && !positions.has(id)) {
-      positions.set(id, index);
-    }
-  });
-  return positions;
 }
 
 function normalizeFilter(value) {

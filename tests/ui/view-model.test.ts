@@ -261,43 +261,133 @@ test("buildOfficePods groups visible main agents with their sub agents", () => {
   ]);
 });
 
-test("buildOfficePods prioritizes waiting and working pods while preserving stable working order", () => {
-  const idle = {
+test("buildOfficePods sorts pods by simple status priority and newest creation time", () => {
+  const idleRecent = {
     ...baseAgent,
-    id: "main-idle",
+    id: "main-idle-recent",
     kind: "main_agent",
     status: "idle",
-    updatedAt: 1780010400000,
+    createdAt: 1780010600000,
   };
-  const firstWorking = {
+  const finishedRecent = {
     ...baseAgent,
-    id: "main-working-a",
+    id: "main-finished-recent",
+    kind: "main_agent",
+    status: "finished",
+    createdAt: 1780010500000,
+  };
+  const workingOld = {
+    ...baseAgent,
+    id: "main-working-old",
     kind: "main_agent",
     status: "working",
-    updatedAt: 1780010100000,
+    createdAt: 1780010100000,
   };
-  const secondWorking = {
+  const approvalRecent = {
     ...baseAgent,
-    id: "main-working-b",
-    kind: "main_agent",
-    status: "working",
-    updatedAt: 1780010500000,
-  };
-  const approval = {
-    ...baseAgent,
-    id: "main-approval",
+    id: "main-approval-recent",
     kind: "main_agent",
     status: "waiting_approval",
-    updatedAt: 1780010000000,
+    createdAt: 1780010400000,
+  };
+  const unknownNewest = {
+    ...baseAgent,
+    id: "main-unknown-newest",
+    kind: "main_agent",
+    status: "unknown",
+    createdAt: 1780010700000,
   };
 
   assert.deepEqual(
     summarizeOfficePods(
-      buildOfficePods([idle, secondWorking, firstWorking, approval], {
-        previousPodIds: ["main-working-a", "main-working-b", "main-idle", "main-approval"],
+      buildOfficePods([unknownNewest, idleRecent, finishedRecent, workingOld, approvalRecent], {
+        previousPodIds: [
+          "main-unknown-newest",
+          "main-idle-recent",
+          "main-finished-recent",
+          "main-working-old",
+          "main-approval-recent",
+        ],
       }),
     ).map((pod) => pod.id),
-    ["main-approval", "main-working-a", "main-working-b", "main-idle"],
+    [
+      "main-approval-recent",
+      "main-working-old",
+      "main-finished-recent",
+      "main-idle-recent",
+      "main-unknown-newest",
+    ],
+  );
+});
+
+test("buildOfficePods sorts sub agents by simple status priority and newest creation time", () => {
+  const parent = {
+    ...baseAgent,
+    id: "main-parent",
+    kind: "main_agent",
+    status: "idle",
+    createdAt: 1780010000000,
+  };
+  const unknownNewest = {
+    ...baseAgent,
+    id: "sub-unknown-newest",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "unknown",
+    createdAt: 1780010700000,
+  };
+  const idleRecent = {
+    ...baseAgent,
+    id: "sub-idle-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "idle",
+    createdAt: 1780010600000,
+  };
+  const finishedRecent = {
+    ...baseAgent,
+    id: "sub-finished-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "finished",
+    createdAt: 1780010500000,
+  };
+  const workingOld = {
+    ...baseAgent,
+    id: "sub-working-old",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "working",
+    createdAt: 1780010100000,
+  };
+  const approvalRecent = {
+    ...baseAgent,
+    id: "sub-approval-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "waiting_approval",
+    createdAt: 1780010400000,
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(
+      buildOfficePods([parent, unknownNewest, idleRecent, finishedRecent, workingOld, approvalRecent], {
+        previousAgentIds: [
+          "sub-unknown-newest",
+          "sub-idle-recent",
+          "sub-finished-recent",
+          "sub-working-old",
+          "sub-approval-recent",
+        ],
+      }),
+    )[0].children,
+    [
+      "sub-approval-recent",
+      "sub-working-old",
+      "sub-finished-recent",
+      "sub-idle-recent",
+      "sub-unknown-newest",
+    ],
   );
 });
 
@@ -345,8 +435,8 @@ test("buildOfficePods groups visible sub agents without visible parents into an 
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([child, parent])), [
-    { id: "unassigned-sub-agents", type: "unassigned", agentId: null, children: ["sub-orphan"] },
     { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+    { id: "unassigned-sub-agents", type: "unassigned", agentId: null, children: ["sub-orphan"] },
   ]);
 });
 
@@ -367,8 +457,8 @@ test("buildOfficePods groups rootless unknown agents into an other pod", () => {
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([unknown, parent])), [
-    { id: "other-agents", type: "other", agentId: null, children: ["unknown-1"] },
     { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-1"] },
   ]);
 });
 
@@ -396,8 +486,8 @@ test("buildOfficePods keeps non-sub agents with visible parents in the other pod
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([nestedUnknown, parent, rootlessUnknown])), [
-    { id: "other-agents", type: "other", agentId: null, children: ["unknown-nested", "unknown-rootless"] },
     { id: "main-1", type: "main", agentId: "main-1", children: [] },
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-nested", "unknown-rootless"] },
   ]);
 });
 
