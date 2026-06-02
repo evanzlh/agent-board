@@ -384,8 +384,10 @@ function renderOfficeAgent(agent, role) {
   button.title = `${valueOrEmpty(agent.displayName)} · ${valueOrEmpty(agent.status)} · ${valueOrEmpty(agent.cwd)}`;
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => {
+    const scrollPosition = captureScrollPosition();
     state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
     renderActiveView();
+    restoreScrollPosition(scrollPosition);
   });
 
   const bubble = document.createElement("span");

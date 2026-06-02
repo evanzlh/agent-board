@@ -340,6 +340,17 @@ test("GET /ui assets render detailed office workers with graphic status signals"
   });
 });
 
+test("GET /ui assets preserve scroll when selecting office agents", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+
+    assert.match(
+      script,
+      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?state\.expandedAgentId = state\.expandedAgentId === agent\.id \? null : agent\.id;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
+    );
+  });
+});
+
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const paths = [
