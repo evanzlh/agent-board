@@ -69,7 +69,7 @@ export async function applySessionApprovalEvidence(
 }
 
 export async function findLiveCodexResumeSessionIds(): Promise<Set<string> | null> {
-  const processIds = await listCodexResumeProcessIds();
+  const processIds = await listCodexAgentProcessIds();
   if (processIds === null) {
     return null;
   }
@@ -85,6 +85,32 @@ export async function findLiveCodexResumeSessionIds(): Promise<Set<string> | nul
     }
   }
   return sessions;
+}
+
+export function isCodexAgentCommand(command: string[]): boolean {
+  if (command.length === 0) {
+    return false;
+  }
+
+  const executable = command[0];
+  const executableName = basename(executable);
+  const codexIndex =
+    executableName === "node" && isCodexExecutable(command[1])
+      ? 1
+      : isCodexExecutable(executable)
+        ? 0
+        : -1;
+
+  if (codexIndex === -1) {
+    return false;
+  }
+
+  const subcommand = command[codexIndex + 1];
+  if (!subcommand || subcommand.startsWith("-")) {
+    return true;
+  }
+
+  return !NON_AGENT_CODEX_SUBCOMMANDS.has(subcommand);
 }
 
 async function findThreadSessionPath(
@@ -397,21 +423,33 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-async function listCodexResumeProcessIds(): Promise<number[] | null> {
+async function listCodexAgentProcessIds(): Promise<number[] | null> {
   let response;
   try {
-    response = await execFile("pgrep", ["-f", "codex resume"], { encoding: "utf8" });
-  } catch {
+    response = await execFile("pgrep", ["-f", "codex"], { encoding: "utf8" });
+  } catch (error) {
+    if (isProcessSearchNoMatch(error)) {
+      return [];
+    }
     return null;
   }
 
   const stdout = response.stdout ?? "";
-  return stdout
+  const processIds = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .map((line) => line.split(/\s+/, 1)[0])
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value > 0);
+
+  const codexAgentProcessIds: number[] = [];
+  for (const processId of processIds) {
+    const command = await readProcCmdline(processId);
+    if (command && isCodexAgentCommand(command)) {
+      codexAgentProcessIds.push(processId);
+    }
+  }
+  return codexAgentProcessIds;
 }
 
 async function readProcWtSession(processId: number): Promise<string | null> {
@@ -428,6 +466,18 @@ async function readProcWtSession(processId: number): Promise<string | null> {
     }
   }
   return null;
+}
+
+async function readProcCmdline(processId: number): Promise<string[] | null> {
+  let cmdline;
+  try {
+    cmdline = await readFile(`/proc/${processId}/cmdline`, "utf8");
+  } catch {
+    return null;
+  }
+
+  const command = cmdline.split("\0").filter((value) => value.length > 0);
+  return command.length > 0 ? command : null;
 }
 
 async function readWtSessionFromSnapshot(path: string): Promise<string | null> {
@@ -454,4 +504,35 @@ async function readWtSessionFromSnapshot(path: string): Promise<string | null> {
     }
   }
   return null;
+}
+
+const NON_AGENT_CODEX_SUBCOMMANDS = new Set([
+  "app-server",
+  "apply",
+  "cloud",
+  "completion",
+  "debug",
+  "doctor",
+  "features",
+  "help",
+  "login",
+  "logout",
+  "mcp",
+  "mcp-server",
+  "plugin",
+  "remote-control",
+  "sandbox",
+  "update",
+]);
+
+function isCodexExecutable(value: string | undefined): boolean {
+  return basename(value ?? "") === "codex";
+}
+
+function basename(value: string): string {
+  return value.split("/").at(-1) ?? value;
+}
+
+function isProcessSearchNoMatch(error: unknown): boolean {
+  return isObject(error) && error.code === 1;
 }
