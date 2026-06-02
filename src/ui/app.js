@@ -3,6 +3,7 @@ import {
   buildAgentRows,
   buildOfficePods,
   compactJson,
+  findMainAgentStatusAlerts,
   filterAgents,
   formatTimestamp,
   safeJson,
@@ -26,6 +27,9 @@ const state = {
   expandedParentIds: new Set(),
   officePodOrder: [],
   officeAgentOrder: [],
+  agentStatuses: new Map(),
+  officeAlerts: [],
+  nextOfficeAlertId: 1,
   activeView: "table",
   autoRefreshEnabled: true,
   isLoading: false,
@@ -48,6 +52,7 @@ const elements = {
   officeView: requiredElement("office-view"),
   officeVisibleCount: requiredElement("office-visible-count"),
   officeGeneratedAt: requiredElement("office-generated-at"),
+  officeAlerts: requiredElement("office-alerts"),
   officeBody: requiredElement("office-body"),
   officeDetail: requiredElement("office-detail"),
   statusFilter: requiredElement("status-filter"),
@@ -128,8 +133,11 @@ async function loadSnapshot() {
     }
 
     if (statusResult.status === "fulfilled") {
+      const nextAgents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
       state.summary = statusResult.value.summary ?? null;
-      state.agents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
+      queueOfficeAlerts(findMainAgentStatusAlerts(nextAgents, state.agentStatuses));
+      state.agents = nextAgents;
+      rememberAgentStatuses(nextAgents);
       state.generatedAt = statusResult.value.generatedAt ?? null;
       succeeded = true;
       if (state.expandedAgentId && !state.agents.some((agent) => agent.id === state.expandedAgentId)) {
@@ -182,6 +190,7 @@ function render() {
   renderError();
   renderSummary();
   renderActiveView();
+  renderOfficeAlerts();
 }
 
 function renderHealth() {
@@ -516,6 +525,51 @@ function renderOfficeDetail(visibleAgents) {
   elements.officeDetail.replaceChildren(title, meta);
 }
 
+function renderOfficeAlerts() {
+  if (state.officeAlerts.length === 0) {
+    elements.officeAlerts.replaceChildren();
+    return;
+  }
+  elements.officeAlerts.replaceChildren(...state.officeAlerts.map(renderOfficeAlert));
+}
+
+function renderOfficeAlert(alert) {
+  const article = document.createElement("article");
+  article.className = "office-alert";
+  article.dataset.status = alert.status;
+  article.setAttribute("role", "alert");
+
+  const copy = document.createElement("div");
+  copy.className = "office-alert__copy";
+
+  const title = document.createElement("strong");
+  title.className = "office-alert__title";
+  title.textContent = officeAlertTitle(alert.status);
+
+  const message = document.createElement("span");
+  message.className = "office-alert__message";
+  message.textContent = `${alert.displayName} moved from working to ${alert.status}.`;
+
+  copy.append(title, message);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "office-alert__close";
+  close.textContent = "Close";
+  close.setAttribute("aria-label", `Close ${alert.displayName} status alert`);
+  close.addEventListener("click", () => {
+    state.officeAlerts = state.officeAlerts.filter((item) => item.id !== alert.id);
+    renderOfficeAlerts();
+  });
+
+  article.append(copy, close);
+  return article;
+}
+
+function officeAlertTitle(status) {
+  return status === "waiting_approval" ? "Approval required" : "Main agent finished";
+}
+
 function detailPair(label, value) {
   const fragment = document.createDocumentFragment();
   const term = document.createElement("dt");
@@ -729,6 +783,19 @@ function pruneExpandedParentIds() {
       state.expandedParentIds.delete(id);
     }
   }
+}
+
+function queueOfficeAlerts(transitions) {
+  state.officeAlerts.push(
+    ...transitions.map((transition) => ({
+      ...transition,
+      id: `office-alert-${state.nextOfficeAlertId++}`,
+    })),
+  );
+}
+
+function rememberAgentStatuses(agents) {
+  state.agentStatuses = new Map(agents.map((agent) => [agent.id, agent.status]));
 }
 
 function rememberOfficeOrder(pods) {

@@ -27,6 +27,25 @@ export function filterAgents(agents, filters = {}, nowMs = Date.now()) {
   });
 }
 
+export function findMainAgentStatusAlerts(agents, previousStatuses = new Map()) {
+  return agents
+    .filter((agent) => {
+      if (agent.kind !== "main_agent") {
+        return false;
+      }
+      if (previousStatuses.get(agent.id) !== "working") {
+        return false;
+      }
+      return agent.status === "finished" || agent.status === "waiting_approval";
+    })
+    .map((agent) => ({
+      agentId: agent.id,
+      displayName: valueOrEmpty(agent.displayName),
+      previousStatus: "working",
+      status: agent.status,
+    }));
+}
+
 export function buildAgentRows(agents) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   const childrenByParent = new Map();

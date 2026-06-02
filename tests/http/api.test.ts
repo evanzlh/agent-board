@@ -365,6 +365,26 @@ test("GET /ui assets preserve stable office ordering between renders", async () 
   });
 });
 
+test("GET /ui assets render dismissible office status alerts", async () => {
+  await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/ui`)).text();
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(html, /id="office-alerts"/);
+    assert.match(html, /aria-live="assertive"/);
+    assert.match(script, /findMainAgentStatusAlerts/);
+    assert.match(script, /agentStatuses:\s*new Map\(\)/);
+    assert.match(script, /officeAlerts:\s*\[\]/);
+    assert.match(script, /queueOfficeAlerts\(/);
+    assert.match(script, /renderOfficeAlert/);
+    assert.match(script, /state\.officeAlerts = state\.officeAlerts\.filter\(\(item\) => item\.id !== alert\.id\);/);
+    assert.match(styles, /\.office-alerts/);
+    assert.match(styles, /\.office-alert/);
+    assert.match(styles, /\.office-alert__close/);
+  });
+});
+
 test("GET /ui styles give office statuses distinct graphic treatments", async () => {
   await withServer(async (baseUrl) => {
     const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();

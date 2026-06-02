@@ -5,6 +5,7 @@ import {
   buildAgentRows,
   buildOfficePods,
   compactJson,
+  findMainAgentStatusAlerts,
   filterAgents,
   formatTimestamp,
   safeJson,
@@ -107,6 +108,79 @@ test("filterAgents filters by active window using thread and turn timestamps", (
   assert.deepEqual(
     filterAgents(agents, { activeWithinMs: 10_000 }, 1780010100000).map((agent) => agent.id),
     ["recent-thread", "recent-turn"],
+  );
+});
+
+test("findMainAgentStatusAlerts reports main agents moving from working to terminal or approval states", () => {
+  const previousStatuses = new Map([
+    ["main-finished", "working"],
+    ["main-approval", "working"],
+    ["main-input", "working"],
+    ["sub-approval", "working"],
+    ["main-idle", "idle"],
+  ]);
+  const agents = [
+    {
+      ...baseAgent,
+      id: "main-finished",
+      kind: "main_agent",
+      displayName: "Finished Lead",
+      status: "finished",
+    },
+    {
+      ...baseAgent,
+      id: "main-approval",
+      kind: "main_agent",
+      displayName: "Approval Lead",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-input",
+      kind: "main_agent",
+      status: "waiting_input",
+    },
+    {
+      ...baseAgent,
+      id: "sub-approval",
+      kind: "sub_agent",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-idle",
+      kind: "main_agent",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-new",
+      kind: "main_agent",
+      status: "finished",
+    },
+  ];
+
+  assert.deepEqual(
+    findMainAgentStatusAlerts(agents, previousStatuses).map((alert) => ({
+      agentId: alert.agentId,
+      displayName: alert.displayName,
+      previousStatus: alert.previousStatus,
+      status: alert.status,
+    })),
+    [
+      {
+        agentId: "main-finished",
+        displayName: "Finished Lead",
+        previousStatus: "working",
+        status: "finished",
+      },
+      {
+        agentId: "main-approval",
+        displayName: "Approval Lead",
+        previousStatus: "working",
+        status: "waiting_approval",
+      },
+    ],
   );
 });
 
