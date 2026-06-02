@@ -46,6 +46,13 @@ test("mapThreadStatus maps active without flags to working", () => {
   assert.equal(mapThreadStatus({ type: "active", activeFlags: [] }, null), "working");
 });
 
+test("mapThreadStatus maps orphaned active sessions as unknown", () => {
+  assert.equal(
+    mapThreadStatus({ type: "active", activeFlags: ["orphanedSession"] }, null),
+    "unknown",
+  );
+});
+
 test("mapThreadStatus maps waiting approval before generic working", () => {
   assert.equal(
     mapThreadStatus({ type: "active", activeFlags: ["waitingOnApproval"] }, null),
