@@ -24,6 +24,8 @@ const state = {
   },
   expandedAgentId: null,
   expandedParentIds: new Set(),
+  officePodOrder: [],
+  officeAgentOrder: [],
   activeView: "table",
   autoRefreshEnabled: true,
   isLoading: false,
@@ -134,6 +136,7 @@ async function loadSnapshot() {
         state.expandedAgentId = null;
       }
       pruneExpandedParentIds();
+      pruneOfficeOrder();
     } else {
       errors.push(`status: ${readError(statusResult.reason)}`);
     }
@@ -298,7 +301,12 @@ function renderOffice() {
     return;
   }
 
-  elements.officeBody.replaceChildren(...buildOfficePods(visibleAgents).map(renderOfficePod));
+  const pods = buildOfficePods(visibleAgents, {
+    previousPodIds: state.officePodOrder,
+    previousAgentIds: state.officeAgentOrder,
+  });
+  elements.officeBody.replaceChildren(...pods.map(renderOfficePod));
+  rememberOfficeOrder(pods);
   renderOfficeDetail(visibleAgents);
 }
 
@@ -721,4 +729,20 @@ function pruneExpandedParentIds() {
       state.expandedParentIds.delete(id);
     }
   }
+}
+
+function rememberOfficeOrder(pods) {
+  state.officePodOrder = pods.map((pod) => pod.id);
+  state.officeAgentOrder = pods.flatMap((pod) => [
+    ...(pod.agent ? [pod.agent.id] : []),
+    ...pod.children.map((agent) => agent.id),
+  ]);
+}
+
+function pruneOfficeOrder() {
+  const currentAgentIds = new Set(state.agents.map((agent) => agent.id));
+  state.officeAgentOrder = state.officeAgentOrder.filter((id) => currentAgentIds.has(id));
+  state.officePodOrder = state.officePodOrder.filter(
+    (id) => id === "unassigned-sub-agents" || id === "other-agents" || currentAgentIds.has(id),
+  );
 }

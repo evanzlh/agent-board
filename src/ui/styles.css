@@ -951,11 +951,11 @@ select {
 .office-agent[data-status="finished"] .office-agent__monitor {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0 5px, transparent 5px),
-    #a7ead0;
+    #a7d8ff;
 }
 
 .office-agent[data-status="finished"] .office-agent__status-glyph {
-  color: #07523d;
+  color: #0f527b;
 }
 
 .office-agent[data-status="finished"] .office-agent__bubble {
@@ -965,7 +965,7 @@ select {
 }
 
 .office-agent[data-status="finished"] .office-agent__screen-line {
-  background: #0e6f52;
+  background: #155d86;
 }
 
 .office-agent[data-status="finished"] .office-agent__body {

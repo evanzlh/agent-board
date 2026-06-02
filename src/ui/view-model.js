@@ -63,11 +63,13 @@ export function buildAgentRows(agents) {
   return rows;
 }
 
-export function buildOfficePods(agents) {
+export function buildOfficePods(agents, options = {}) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   const childrenByParent = new Map();
   const unassignedSubAgents = [];
   const otherAgents = [];
+  const previousPodPositions = previousPositions(options.previousPodIds);
+  const previousAgentPositions = previousPositions(options.previousAgentIds);
 
   for (const agent of agents) {
     if (agent.kind !== "sub_agent") {
@@ -89,7 +91,7 @@ export function buildOfficePods(agents) {
         id: agent.id,
         type: "main",
         agent,
-        children: childrenByParent.get(agent.id) ?? [],
+        children: sortOfficeAgents(childrenByParent.get(agent.id) ?? [], previousAgentPositions),
       });
       continue;
     }
@@ -110,7 +112,7 @@ export function buildOfficePods(agents) {
       id: "unassigned-sub-agents",
       type: "unassigned",
       agent: null,
-      children: unassignedSubAgents,
+      children: sortOfficeAgents(unassignedSubAgents, previousAgentPositions),
     });
   }
   if (otherAgents.length > 0) {
@@ -118,12 +120,15 @@ export function buildOfficePods(agents) {
       id: "other-agents",
       type: "other",
       agent: null,
-      children: otherAgents,
+      children: sortOfficeAgents(otherAgents, previousAgentPositions),
     });
   }
   groupedPods.push(...pods);
 
-  return groupedPods;
+  const initialPodPositions = previousPositions(groupedPods.map((pod) => pod.id));
+  return groupedPods.sort((a, b) =>
+    compareOfficePods(a, b, previousPodPositions, initialPodPositions),
+  );
 }
 
 export function formatTimestamp(value) {
@@ -229,6 +234,105 @@ function visibleMainParentId(agent, byId) {
   }
   const parent = byId.get(parentId);
   return parent?.kind === "main_agent" ? parentId : null;
+}
+
+function sortOfficeAgents(agents, previousAgentPositions) {
+  return [...agents].sort((a, b) => compareOfficeAgents(a, b, previousAgentPositions));
+}
+
+function compareOfficePods(a, b, previousPodPositions, initialPodPositions) {
+  return (
+    officePodPriority(a) - officePodPriority(b) ||
+    comparePreviousPosition(a.id, b.id, previousPodPositions) ||
+    compareOfficeActivity(a, b) ||
+    comparePreviousPosition(a.id, b.id, initialPodPositions) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+function compareOfficeAgents(a, b, previousAgentPositions) {
+  return (
+    officeAgentPriority(a) - officeAgentPriority(b) ||
+    comparePreviousPosition(a.id, b.id, previousAgentPositions) ||
+    compareAgentActivity(a, b) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+function officePodPriority(pod) {
+  return Math.min(...podAgents(pod).map(officeAgentPriority));
+}
+
+function officeAgentPriority(agent) {
+  if (agent.status === "waiting_approval") {
+    return 0;
+  }
+  if (agent.status === "working") {
+    return 1;
+  }
+  if (agent.status === "waiting_input") {
+    return 2;
+  }
+  if (agent.status === "error") {
+    return 3;
+  }
+  if (agent.status === "idle") {
+    return 4;
+  }
+  if (agent.status === "unknown") {
+    return 5;
+  }
+  if (agent.status === "finished") {
+    return 6;
+  }
+  return 7;
+}
+
+function compareOfficeActivity(a, b) {
+  return officePodActivityAt(b) - officePodActivityAt(a);
+}
+
+function compareAgentActivity(a, b) {
+  return officeAgentActivityAt(b) - officeAgentActivityAt(a);
+}
+
+function officePodActivityAt(pod) {
+  return Math.max(...podAgents(pod).map(officeAgentActivityAt));
+}
+
+function officeAgentActivityAt(agent) {
+  return Math.max(
+    numberOrNegativeInfinity(agent.lastEventAt),
+    numberOrNegativeInfinity(agent.updatedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.startedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.completedAt),
+  );
+}
+
+function podAgents(pod) {
+  return pod.agent ? [pod.agent, ...pod.children] : pod.children;
+}
+
+function comparePreviousPosition(aId, bId, positions) {
+  const aPosition = positions.get(aId);
+  const bPosition = positions.get(bId);
+  if (aPosition === undefined && bPosition === undefined) {
+    return 0;
+  }
+  return (aPosition ?? Number.MAX_SAFE_INTEGER) - (bPosition ?? Number.MAX_SAFE_INTEGER);
+}
+
+function previousPositions(ids) {
+  const positions = new Map();
+  if (!Array.isArray(ids)) {
+    return positions;
+  }
+  ids.forEach((id, index) => {
+    if (typeof id === "string" && !positions.has(id)) {
+      positions.set(id, index);
+    }
+  });
+  return positions;
 }
 
 function normalizeFilter(value) {

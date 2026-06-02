@@ -187,6 +187,73 @@ test("buildOfficePods groups visible main agents with their sub agents", () => {
   ]);
 });
 
+test("buildOfficePods prioritizes waiting and working pods while preserving stable working order", () => {
+  const idle = {
+    ...baseAgent,
+    id: "main-idle",
+    kind: "main_agent",
+    status: "idle",
+    updatedAt: 1780010400000,
+  };
+  const firstWorking = {
+    ...baseAgent,
+    id: "main-working-a",
+    kind: "main_agent",
+    status: "working",
+    updatedAt: 1780010100000,
+  };
+  const secondWorking = {
+    ...baseAgent,
+    id: "main-working-b",
+    kind: "main_agent",
+    status: "working",
+    updatedAt: 1780010500000,
+  };
+  const approval = {
+    ...baseAgent,
+    id: "main-approval",
+    kind: "main_agent",
+    status: "waiting_approval",
+    updatedAt: 1780010000000,
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(
+      buildOfficePods([idle, secondWorking, firstWorking, approval], {
+        previousPodIds: ["main-working-a", "main-working-b", "main-idle", "main-approval"],
+      }),
+    ).map((pod) => pod.id),
+    ["main-approval", "main-working-a", "main-working-b", "main-idle"],
+  );
+});
+
+test("buildOfficePods lets active sub agents lift their main pod", () => {
+  const idleParent = {
+    ...baseAgent,
+    id: "main-idle",
+    kind: "main_agent",
+    status: "idle",
+  };
+  const approvalChild = {
+    ...baseAgent,
+    id: "sub-approval",
+    kind: "sub_agent",
+    parentThreadId: "main-idle",
+    status: "waiting_approval",
+  };
+  const workingParent = {
+    ...baseAgent,
+    id: "main-working",
+    kind: "main_agent",
+    status: "working",
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(buildOfficePods([workingParent, approvalChild, idleParent])).map((pod) => pod.id),
+    ["main-idle", "main-working"],
+  );
+});
+
 test("buildOfficePods groups visible sub agents without visible parents into an unassigned pod", () => {
   const child = {
     ...baseAgent,

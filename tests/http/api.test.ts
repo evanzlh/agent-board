@@ -351,6 +351,20 @@ test("GET /ui assets preserve scroll when selecting office agents", async () => 
   });
 });
 
+test("GET /ui assets preserve stable office ordering between renders", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+
+    assert.match(script, /officePodOrder:\s*\[\]/);
+    assert.match(script, /officeAgentOrder:\s*\[\]/);
+    assert.match(
+      script,
+      /buildOfficePods\(visibleAgents,\s*\{\s*previousPodIds:\s*state\.officePodOrder,\s*previousAgentIds:\s*state\.officeAgentOrder,/,
+    );
+    assert.match(script, /rememberOfficeOrder\(pods\);/);
+  });
+});
+
 test("GET /ui styles give office statuses distinct graphic treatments", async () => {
   await withServer(async (baseUrl) => {
     const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
@@ -372,6 +386,10 @@ test("GET /ui styles give office statuses distinct graphic treatments", async ()
       /\.office-agent\[data-status="unknown"\] \.office-agent__monitor \{[\s\S]*?repeating-linear-gradient/,
     );
     assert.match(styles, /\.office-agent\[data-status="idle"\] \.office-agent__screen-line/);
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="finished"\] \.office-agent__monitor \{[\s\S]*?#a7d8ff;/,
+    );
     assert.match(styles, /\.office-agent\[data-status="finished"\] \.office-agent__bubble/);
   });
 });
