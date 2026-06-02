@@ -351,6 +351,31 @@ test("GET /ui assets preserve scroll when selecting office agents", async () => 
   });
 });
 
+test("GET /ui styles give office statuses distinct graphic treatments", async () => {
+  await withServer(async (baseUrl) => {
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-light \{[\s\S]*?background: #f59f2f;/,
+    );
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="waiting_input"\] \.office-agent__status-light \{[\s\S]*?background: #3d8bfd;/,
+    );
+    assert.doesNotMatch(
+      styles,
+      /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-light,\s*\.office-agent\[data-status="waiting_input"\] \.office-agent__status-light/,
+    );
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="unknown"\] \.office-agent__monitor \{[\s\S]*?repeating-linear-gradient/,
+    );
+    assert.match(styles, /\.office-agent\[data-status="idle"\] \.office-agent__screen-line/);
+    assert.match(styles, /\.office-agent\[data-status="finished"\] \.office-agent__bubble/);
+  });
+});
+
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const paths = [

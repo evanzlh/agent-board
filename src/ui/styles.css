@@ -276,10 +276,14 @@ select {
   background: #ffedbf;
 }
 
-.office-pod__status[data-status="waiting_approval"],
-.office-pod__status[data-status="waiting_input"] {
+.office-pod__status[data-status="waiting_approval"] {
   color: #733300;
   background: #ffe0c2;
+}
+
+.office-pod__status[data-status="waiting_input"] {
+  color: #123a73;
+  background: #dcebff;
 }
 
 .office-pod__status[data-status="error"] {
@@ -917,7 +921,18 @@ select {
 }
 
 .office-agent[data-status="idle"] .office-agent__monitor {
-  background: #cbd3dc;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0 5px, transparent 5px),
+    #cbd3dc;
+}
+
+.office-agent[data-status="idle"] .office-agent__status-glyph {
+  color: #4f657a;
+}
+
+.office-agent[data-status="idle"] .office-agent__screen-line {
+  background: #64788d;
+  opacity: 0.62;
 }
 
 .office-agent[data-status="idle"] .office-agent__body {
@@ -927,22 +942,36 @@ select {
 }
 
 .office-agent[data-status="finished"] .office-agent__status-light {
-  background: #25a268;
-  box-shadow: 0 0 0 3px rgba(37, 162, 104, 0.16);
+  background: #0aa374;
+  box-shadow:
+    0 0 0 3px rgba(10, 163, 116, 0.18),
+    0 0 8px rgba(10, 163, 116, 0.45);
 }
 
 .office-agent[data-status="finished"] .office-agent__monitor {
-  background: #bfdccf;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0 5px, transparent 5px),
+    #a7ead0;
 }
 
 .office-agent[data-status="finished"] .office-agent__status-glyph {
-  color: #0e5b3a;
+  color: #07523d;
+}
+
+.office-agent[data-status="finished"] .office-agent__bubble {
+  border-color: #137a5a;
+  background: #dff8ec;
+  color: #07523d;
+}
+
+.office-agent[data-status="finished"] .office-agent__screen-line {
+  background: #0e6f52;
 }
 
 .office-agent[data-status="finished"] .office-agent__body {
   background:
     linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.35) 11px 13px, transparent 13px),
-    #7da88f;
+    #4aa385;
 }
 
 .office-agent[data-status="waiting_approval"] .office-agent__bubble,
@@ -950,8 +979,7 @@ select {
   animation: office-bubble-pulse 1.4s ease-in-out infinite;
 }
 
-.office-agent[data-status="waiting_approval"] .office-agent__status-light,
-.office-agent[data-status="waiting_input"] .office-agent__status-light {
+.office-agent[data-status="waiting_approval"] .office-agent__status-light {
   background: #f59f2f;
   box-shadow:
     0 0 0 3px rgba(245, 159, 47, 0.2),
@@ -959,23 +987,64 @@ select {
   animation: office-status-pulse 1.4s ease-in-out infinite;
 }
 
-.office-agent[data-status="waiting_approval"] .office-agent__monitor,
-.office-agent[data-status="waiting_input"] .office-agent__monitor {
+.office-agent[data-status="waiting_approval"] .office-agent__monitor {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0 5px, transparent 5px),
     #f6c271;
 }
 
-.office-agent[data-status="waiting_approval"] .office-agent__status-glyph,
-.office-agent[data-status="waiting_input"] .office-agent__status-glyph {
+.office-agent[data-status="waiting_approval"] .office-agent__bubble {
+  border-color: #9a5b00;
+  background: #fff0ca;
   color: #733300;
 }
 
-.office-agent[data-status="waiting_approval"] .office-agent__body,
-.office-agent[data-status="waiting_input"] .office-agent__body {
+.office-agent[data-status="waiting_approval"] .office-agent__status-glyph {
+  color: #733300;
+}
+
+.office-agent[data-status="waiting_approval"] .office-agent__screen-line {
+  background: #7b4200;
+}
+
+.office-agent[data-status="waiting_approval"] .office-agent__body {
   background:
     linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.35) 11px 13px, transparent 13px),
     #d9a76f;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__status-light {
+  background: #3d8bfd;
+  box-shadow:
+    0 0 0 3px rgba(61, 139, 253, 0.18),
+    0 0 10px rgba(61, 139, 253, 0.56);
+  animation: office-status-pulse 1.2s ease-in-out infinite;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__monitor {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0 5px, transparent 5px),
+    #9ec5ff;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__bubble {
+  border-color: #2363bf;
+  background: #dcebff;
+  color: #123a73;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__status-glyph {
+  color: #123a73;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__screen-line {
+  background: #0d3f89;
+}
+
+.office-agent[data-status="waiting_input"] .office-agent__body {
+  background:
+    linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.35) 11px 13px, transparent 13px),
+    #6f96d4;
 }
 
 .office-agent[data-status="error"] {
@@ -1013,14 +1082,29 @@ select {
 
 .office-agent[data-status="unknown"] .office-agent__status-light {
   background: #c9d1da;
+  box-shadow: inset 0 0 0 3px #edf1f5;
 }
 
 .office-agent[data-status="unknown"] .office-agent__monitor {
-  background: #cbd3dc;
+  background:
+    repeating-linear-gradient(135deg, rgba(77, 88, 99, 0.28) 0 3px, transparent 3px 7px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0 5px, transparent 5px),
+    #cbd3dc;
 }
 
 .office-agent[data-status="unknown"] .office-agent__status-glyph {
   color: #4d5863;
+}
+
+.office-agent[data-status="unknown"] .office-agent__screen-line {
+  background: #59626f;
+  opacity: 0.48;
+}
+
+.office-agent[data-status="unknown"] .office-agent__body {
+  background:
+    linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.28) 11px 13px, transparent 13px),
+    #9aa3ad;
 }
 
 .office-agent.is-stale[data-status="working"] .office-agent__monitor,
@@ -1198,10 +1282,14 @@ tbody tr.is-expanded {
   background: #ffedbf;
 }
 
-.status-pill[data-status="waiting_approval"],
-.status-pill[data-status="waiting_input"] {
+.status-pill[data-status="waiting_approval"] {
   color: #733300;
   background: #ffe0c2;
+}
+
+.status-pill[data-status="waiting_input"] {
+  color: #123a73;
+  background: #dcebff;
 }
 
 .status-pill[data-status="error"] {
