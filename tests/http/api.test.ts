@@ -317,6 +317,29 @@ test("GET /ui assets render sub agents as subordinate office workers", async () 
   });
 });
 
+test("GET /ui assets render detailed office workers with graphic status signals", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(script, /office-agent__chair/);
+    assert.match(script, /office-agent__hair/);
+    assert.match(script, /office-agent__status-light/);
+    assert.match(script, /office-agent__status-glyph/);
+    assert.match(script, /office-agent__screen-line/);
+    assert.match(script, /office-agent__desk-leg/);
+    assert.match(script, /office-agent__desk-mug/);
+
+    assert.match(styles, /\.office-agent\[data-status="working"\] \.office-agent__status-light/);
+    assert.match(styles, /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-glyph/);
+    assert.match(styles, /\.office-agent\[data-status="waiting_input"\] \.office-agent__bubble/);
+    assert.match(styles, /\.office-agent\[data-status="error"\] \.office-agent__status-light/);
+    assert.match(styles, /\.office-agent\[data-status="finished"\] \.office-agent__status-glyph/);
+    assert.match(styles, /\.office-agent\[data-role="sub"\][\s\S]*?opacity: 0\.78;/);
+    assert.match(styles, /\.office-agent\[data-role="sub"\] \.office-agent__status-light/);
+  });
+});
+
 test("unknown /ui asset returns JSON 404", async () => {
   await withServer(async (baseUrl) => {
     const paths = [

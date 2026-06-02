@@ -392,10 +392,21 @@ function renderOfficeAgent(agent, role) {
   bubble.className = "office-agent__bubble";
   bubble.textContent = officeAgentBubble(agent.status);
 
+  const statusLight = span("office-agent__status-light", "");
+
+  const chair = span("office-agent__chair", "");
+
   const avatar = document.createElement("span");
   avatar.className = "office-agent__avatar";
+  const head = span("office-agent__head", "");
+  head.append(
+    span("office-agent__hair", ""),
+    span("office-agent__face", ""),
+    span("office-agent__headset", ""),
+  );
   avatar.append(
-    span("office-agent__head", ""),
+    head,
+    span("office-agent__neck", ""),
     span("office-agent__body", ""),
     span("office-agent__arm office-agent__arm--left", ""),
     span("office-agent__arm office-agent__arm--right", ""),
@@ -403,7 +414,21 @@ function renderOfficeAgent(agent, role) {
 
   const desk = document.createElement("span");
   desk.className = "office-agent__desk";
-  desk.append(span("office-agent__monitor", ""), span("office-agent__keyboard", ""));
+  const monitor = span("office-agent__monitor", "");
+  monitor.append(
+    span("office-agent__status-glyph", officeAgentStatusGlyph(agent.status)),
+    span("office-agent__screen-line office-agent__screen-line--primary", ""),
+    span("office-agent__screen-line office-agent__screen-line--secondary", ""),
+    span("office-agent__screen-line office-agent__screen-line--tertiary", ""),
+  );
+  desk.append(
+    monitor,
+    span("office-agent__keyboard", ""),
+    span("office-agent__trackpad", ""),
+    span("office-agent__desk-mug", ""),
+    span("office-agent__desk-leg office-agent__desk-leg--left", ""),
+    span("office-agent__desk-leg office-agent__desk-leg--right", ""),
+  );
 
   const label = document.createElement("span");
   label.className = "office-agent__label";
@@ -413,7 +438,7 @@ function renderOfficeAgent(agent, role) {
   status.className = "office-agent__status";
   status.textContent = valueOrEmpty(agent.status);
 
-  button.append(bubble, avatar, desk, label, status);
+  button.append(bubble, statusLight, chair, avatar, desk, label, status, span("office-agent__floor-shadow", ""));
   return button;
 }
 
@@ -431,6 +456,28 @@ function officeAgentBubble(status) {
     return "done";
   }
   return "";
+}
+
+function officeAgentStatusGlyph(status) {
+  if (status === "working") {
+    return "RUN";
+  }
+  if (status === "waiting_approval") {
+    return "OK?";
+  }
+  if (status === "waiting_input") {
+    return "IN?";
+  }
+  if (status === "error") {
+    return "ERR";
+  }
+  if (status === "finished") {
+    return "DONE";
+  }
+  if (status === "idle") {
+    return "IDLE";
+  }
+  return "?";
 }
 
 function renderOfficeDetail(visibleAgents) {
