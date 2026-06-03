@@ -1,10 +1,10 @@
-# Codex Status Dashboard Design
+# AgentBoard Dashboard Design
 
 Date: 2026-05-29
 
 ## Summary
 
-Build `codex-status` as a local read-only daemon that observes Codex App Server state and exposes a stable JSON API for status dashboards and scripts.
+Build AgentBoard as a local read-only daemon that observes coding-agent state and exposes a stable JSON API for status dashboards and scripts. The first provider is Codex, and the current CLI/package name remains `codex-status`.
 
 The first version does not provide a Web UI or terminal UI. It focuses on a reliable status collection layer, an in-memory normalized status store, and local HTTP endpoints that future UIs can consume.
 

@@ -1,9 +1,9 @@
-# codex-status
+# AgentBoard
 
-`codex-status` is a local, read-only daemon for observing Codex App Server state. It normalizes Codex threads into agent records, exposes a small JSON/SSE API for dashboards and scripts, and serves a built-in web UI at `/ui`.
+AgentBoard is a local, read-only status monitor for coding agents. It currently observes Codex App Server state, normalizes Codex threads into agent records, exposes a small JSON/SSE API for dashboards and scripts, and serves a built-in web UI at `/ui`.
 
 > [!NOTE]
-> This service observes local Codex state only. It does not approve requests, send user input, stop agents, or mutate Codex sessions.
+> AgentBoard currently supports Codex only. It observes local Codex state; it does not approve requests, send user input, stop agents, or mutate Codex sessions.
 
 ## What It Provides
 
@@ -69,9 +69,9 @@ node src/cli.ts daemon --host 0.0.0.0 --port 18000 --refresh-interval-ms 2000
 
 ## App Server Lifecycle
 
-On startup, `codex-status` runs `codex --version`, then connects to the Codex App Server using one of two modes:
+On startup, AgentBoard runs `codex --version`, then connects to the Codex App Server using one of two modes:
 
-| Mode | When It Is Used | Process Owned By `codex-status` |
+| Mode | When It Is Used | Process Owned By AgentBoard |
 | --- | --- | --- |
 | `external-daemon` | `codex app-server daemon start` succeeds, or `--no-start-app-server` is used. | A local `codex app-server proxy` process. The external daemon remains owned by Codex CLI. |
 | `managed-child` | The managed standalone daemon is unavailable and auto-start is enabled. | A child `codex app-server --listen stdio://` process. |
@@ -168,7 +168,7 @@ Each agent record is derived from one Codex App Server thread.
 | `agentNickname` / `agentRole` | Sub-agent identity hints when present. |
 | `lastTurn` | Last known turn status and timestamps. |
 | `waitingSince` | First observed time for approval/input waiting states. |
-| `lastEventAt` | Last local update time observed by `codex-status`. |
+| `lastEventAt` | Last local update time observed by AgentBoard. |
 | `stale` | `true` when App Server is disconnected and the agent has exceeded the stale threshold. |
 
 Current status mapping:

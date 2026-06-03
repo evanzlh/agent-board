@@ -235,7 +235,7 @@ test("GET /ui serves the Web frontend HTML", async () => {
     assert.equal(bare.headers.get("content-type"), "text/html; charset=utf-8");
     assert.equal(bare.headers.get("cache-control"), "no-cache");
     const html = await bare.text();
-    assert.match(html, /<title>Codex Status<\/title>/);
+    assert.match(html, /<title>AgentBoard<\/title>/);
     assert.match(html, /id="table-view-button"/);
     assert.match(html, /id="office-view-button"/);
     assert.match(html, /id="table-view"/);

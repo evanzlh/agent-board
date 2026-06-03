@@ -1,11 +1,12 @@
-# Codex Status Web Frontend Design
+# AgentBoard Web Frontend Design
 
 Date: 2026-05-29
 
 ## Summary
 
-Add a built-in Web frontend to `codex-status` for debugging whether Codex agent status
-mapping is accurate.
+Add a built-in Web frontend to AgentBoard for debugging whether coding-agent status
+mapping is accurate. The first provider is Codex, and the current CLI/package name remains
+`codex-status`.
 
 The first version is a local read-only debugging tool served by the existing daemon. It
 focuses on the current snapshot only: a dense table of agents, the mapped public status,
@@ -14,7 +15,7 @@ SSE events, or provide any agent control actions.
 
 ## Confirmed Product Direction
 
-- Primary audience: a developer debugging the `codex-status` service and App Server
+- Primary audience: a developer debugging AgentBoard and Codex App Server
   status mapping.
 - First-version priority: verify whether each agent's mapped status is accurate.
 - Time model: current snapshot only.
