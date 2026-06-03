@@ -39,6 +39,9 @@ export function mapThreadStatus(
     if (flags.includes("waitingOnUserInput")) {
       return "waiting_input";
     }
+    if (flags.includes("orphanedSession")) {
+      return "unknown";
+    }
     return "working";
   }
 

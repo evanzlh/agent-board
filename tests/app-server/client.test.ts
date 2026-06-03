@@ -255,6 +255,107 @@ test("client marks unresolved session escalation as waiting approval evidence", 
   });
 });
 
+test("client marks orphaned active sessions as unknown", async () => {
+  const codexHome = await writeSession(
+    "orphaned-active",
+    "2026/06/02",
+    [{ timestamp: "2026-06-02T15:16:53.000Z", type: "response_item", payload: {} }],
+  );
+  await writeShellSnapshot(codexHome, "orphaned-active", "dead-session");
+
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "orphaned-active",
+        sessionId: "orphaned-active",
+        status: { type: "active", activeFlags: [] },
+        createdAt: Date.parse("2026-06-02T15:00:00.000Z"),
+        updatedAt: Date.parse("2026-06-02T15:16:53.000Z"),
+        turns: [{ status: "inProgress", startedAt: 1780041373, completedAt: null }],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "orphaned-active",
+      sessionId: "orphaned-active",
+      status: { type: "active", activeFlags: [] },
+      createdAt: Date.parse("2026-06-02T15:00:00.000Z"),
+      updatedAt: Date.parse("2026-06-02T15:16:53.000Z"),
+      turns: [{ status: "inProgress", startedAt: 1780041373, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc, {
+    detectOrphanedSessions: true,
+    resolveLiveCodexResumeSessionIds: async () => new Set(),
+  });
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, {
+    type: "active",
+    activeFlags: ["orphanedSession"],
+  });
+});
+
+test("client parses declared WT_SESSION lines when detecting orphaned sessions", async () => {
+  const codexHome = await writeSession(
+    "orphaned-declared",
+    "2026/06/03",
+    [{ timestamp: "2026-06-03T10:00:00.000Z", type: "response_item", payload: {} }],
+  );
+  await writeShellSnapshot(
+    codexHome,
+    "orphaned-declared",
+    "dead-declared-session",
+    "declare",
+  );
+
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "orphaned-declared",
+        sessionId: "orphaned-declared",
+        status: { type: "active", activeFlags: [] },
+        createdAt: Date.parse("2026-06-03T09:30:00.000Z"),
+        updatedAt: Date.parse("2026-06-03T10:00:00.000Z"),
+        turns: [{ status: "inProgress", startedAt: 1780381373, completedAt: null }],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "orphaned-declared",
+      sessionId: "orphaned-declared",
+      status: { type: "active", activeFlags: [] },
+      createdAt: Date.parse("2026-06-03T09:30:00.000Z"),
+      updatedAt: Date.parse("2026-06-03T10:00:00.000Z"),
+      turns: [{ status: "inProgress", startedAt: 1780381373, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc, {
+    detectOrphanedSessions: true,
+    resolveLiveCodexResumeSessionIds: async () => new Set(),
+  });
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, {
+    type: "active",
+    activeFlags: ["orphanedSession"],
+  });
+});
+
 test("client ignores resolved session escalation evidence", async () => {
   const codexHome = await writeSession(
     "resolved-approval",
@@ -438,4 +539,23 @@ async function writeSession(
     "utf8",
   );
   return codexHome;
+}
+
+async function writeShellSnapshot(
+  codexHome: string,
+  threadId: string,
+  wtSession: string,
+  format: "plain" | "declare" = "plain",
+): Promise<void> {
+  const shellDir = join(codexHome, "shell_snapshots");
+  await mkdir(shellDir, { recursive: true });
+  const line =
+    format === "declare"
+      ? `declare -x WT_SESSION="${wtSession}"`
+      : `WT_SESSION=${wtSession}`;
+  await writeFile(
+    join(shellDir, `${threadId}.${Date.now()}.sh`),
+    `${line}\n`,
+    "utf8",
+  );
 }

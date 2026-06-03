@@ -68,7 +68,9 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
 
       const nextClient =
         options.clientFactory?.(nextAppServer) ??
-        new AppServerClient(new JsonRpcStdioClient(nextAppServer.process as never));
+        new AppServerClient(new JsonRpcStdioClient(nextAppServer.process as never), {
+          detectOrphanedSessions: true,
+        });
 
       nextClient.on("notification", (notification) => {
         store.applyNotification(notification);

@@ -13,6 +13,11 @@ export type AppServerNotification = {
   params?: unknown;
 };
 
+export type AppServerClientOptions = {
+  detectOrphanedSessions?: boolean;
+  resolveLiveCodexResumeSessionIds?: () => Promise<Set<string> | null>;
+};
+
 export type InitialAppServerState = {
   threads: AppServerThread[];
   loadedThreadIds: string[];
@@ -20,11 +25,13 @@ export type InitialAppServerState = {
 
 export class AppServerClient extends EventEmitter {
   readonly #rpc: RpcLike;
+  readonly #options: AppServerClientOptions;
   #codexHome: string | null = null;
 
-  constructor(rpc: RpcLike) {
+  constructor(rpc: RpcLike, options: AppServerClientOptions = {}) {
     super();
     this.#rpc = rpc;
+    this.#options = options;
     this.#rpc.on("notification", (notification) => {
       this.emit("notification", notification as AppServerNotification);
     });
@@ -55,6 +62,8 @@ export class AppServerClient extends EventEmitter {
     const mergedThreads = mergeHydratedThreads(threads, hydratedThreads);
     const threadsWithSessionEvidence = await applySessionApprovalEvidence(mergedThreads, {
       codexHome: this.#codexHome,
+      detectOrphanedSessions: this.#options.detectOrphanedSessions ?? false,
+      resolveLiveCodexResumeSessionIds: this.#options.resolveLiveCodexResumeSessionIds,
     });
     return { threads: threadsWithSessionEvidence, loadedThreadIds };
   }

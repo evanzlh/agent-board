@@ -27,6 +27,25 @@ export function filterAgents(agents, filters = {}, nowMs = Date.now()) {
   });
 }
 
+export function findMainAgentStatusAlerts(agents, previousStatuses = new Map()) {
+  return agents
+    .filter((agent) => {
+      if (agent.kind !== "main_agent") {
+        return false;
+      }
+      if (previousStatuses.get(agent.id) !== "working") {
+        return false;
+      }
+      return agent.status === "finished" || agent.status === "waiting_approval";
+    })
+    .map((agent) => ({
+      agentId: agent.id,
+      displayName: valueOrEmpty(agent.displayName),
+      previousStatus: "working",
+      status: agent.status,
+    }));
+}
+
 export function buildAgentRows(agents) {
   const byId = new Map(agents.map((agent) => [agent.id, agent]));
   const childrenByParent = new Map();
@@ -89,7 +108,7 @@ export function buildOfficePods(agents) {
         id: agent.id,
         type: "main",
         agent,
-        children: childrenByParent.get(agent.id) ?? [],
+        children: sortOfficeAgents(childrenByParent.get(agent.id) ?? []),
       });
       continue;
     }
@@ -110,7 +129,7 @@ export function buildOfficePods(agents) {
       id: "unassigned-sub-agents",
       type: "unassigned",
       agent: null,
-      children: unassignedSubAgents,
+      children: sortOfficeAgents(unassignedSubAgents),
     });
   }
   if (otherAgents.length > 0) {
@@ -118,12 +137,12 @@ export function buildOfficePods(agents) {
       id: "other-agents",
       type: "other",
       agent: null,
-      children: otherAgents,
+      children: sortOfficeAgents(otherAgents),
     });
   }
   groupedPods.push(...pods);
 
-  return groupedPods;
+  return groupedPods.sort(compareOfficePods);
 }
 
 export function formatTimestamp(value) {
@@ -229,6 +248,78 @@ function visibleMainParentId(agent, byId) {
   }
   const parent = byId.get(parentId);
   return parent?.kind === "main_agent" ? parentId : null;
+}
+
+function sortOfficeAgents(agents) {
+  return [...agents].sort(compareOfficeAgents);
+}
+
+function compareOfficePods(a, b) {
+  return (
+    officePodPriority(a) - officePodPriority(b) ||
+    compareOfficePodSortTime(a, b) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+function compareOfficeAgents(a, b) {
+  return (
+    officeAgentPriority(a) - officeAgentPriority(b) ||
+    compareOfficeAgentSortTime(a, b) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
+function officePodPriority(pod) {
+  return Math.min(...podAgents(pod).map(officeAgentPriority));
+}
+
+function officeAgentPriority(agent) {
+  if (agent.status === "working" || agent.status === "waiting_approval") {
+    return 0;
+  }
+  if (agent.status === "finished") {
+    return 1;
+  }
+  if (agent.status === "unknown") {
+    return 3;
+  }
+  return 2;
+}
+
+function compareOfficePodSortTime(a, b) {
+  return officePodSortTime(b) - officePodSortTime(a);
+}
+
+function compareOfficeAgentSortTime(a, b) {
+  return officeAgentSortTime(b) - officeAgentSortTime(a);
+}
+
+function officePodSortTime(pod) {
+  const priority = officePodPriority(pod);
+  return Math.max(
+    ...podAgents(pod)
+      .filter((agent) => officeAgentPriority(agent) === priority)
+      .map(officeAgentSortTime),
+  );
+}
+
+function officeAgentSortTime(agent) {
+  const createdAt = numberOrNegativeInfinity(agent.createdAt);
+  return createdAt !== Number.NEGATIVE_INFINITY ? createdAt : officeAgentActivityAt(agent);
+}
+
+function officeAgentActivityAt(agent) {
+  return Math.max(
+    numberOrNegativeInfinity(agent.lastEventAt),
+    numberOrNegativeInfinity(agent.updatedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.startedAt),
+    numberOrNegativeInfinity(agent.lastTurn?.completedAt),
+  );
+}
+
+function podAgents(pod) {
+  return pod.agent ? [pod.agent, ...pod.children] : pod.children;
 }
 
 function normalizeFilter(value) {

@@ -1,11 +1,17 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
 import { access, readdir, readFile } from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import { normalizeTimestampMs } from "../domain/mapper.ts";
-import type { Dirent } from "node:fs";
 import type { AppServerThread } from "../domain/types.ts";
+
+const execFile = promisify(execFileCallback);
 
 export type SessionEvidenceOptions = {
   codexHome: string | null;
+  detectOrphanedSessions?: boolean;
+  resolveLiveCodexResumeSessionIds?: () => Promise<Set<string> | null>;
 };
 
 export async function applySessionApprovalEvidence(
@@ -16,10 +22,34 @@ export async function applySessionApprovalEvidence(
     return threads;
   }
 
+  const shouldDetectOrphaned = options.detectOrphanedSessions === true;
+  const liveSessions =
+    shouldDetectOrphaned && options.resolveLiveCodexResumeSessionIds
+      ? await options.resolveLiveCodexResumeSessionIds()
+      : shouldDetectOrphaned
+        ? await findLiveCodexResumeSessionIds()
+        : null;
+  const disableOrphanCheck = shouldDetectOrphaned && liveSessions === null;
+
   const nextThreads: AppServerThread[] = [];
   let changed = false;
 
   for (const thread of threads) {
+    if (
+      shouldDetectOrphaned &&
+      !disableOrphanCheck &&
+      !hasWaitingApprovalFlag(thread.status) &&
+      isWorkingThread(thread) &&
+      (await isThreadOrphaned(thread, options.codexHome, liveSessions))
+    ) {
+      const status = withOrphanedActiveStatus(thread.status);
+      if (status !== thread.status) {
+        nextThreads.push({ ...thread, status });
+        changed = true;
+        continue;
+      }
+    }
+
     if (!isApprovalEvidenceCandidate(thread)) {
       nextThreads.push(thread);
       continue;
@@ -36,6 +66,51 @@ export async function applySessionApprovalEvidence(
   }
 
   return changed ? nextThreads : threads;
+}
+
+export async function findLiveCodexResumeSessionIds(): Promise<Set<string> | null> {
+  const processIds = await listCodexAgentProcessIds();
+  if (processIds === null) {
+    return null;
+  }
+  if (processIds.length === 0) {
+    return new Set();
+  }
+
+  const sessions = new Set<string>();
+  for (const processId of processIds) {
+    const session = await readProcWtSession(processId);
+    if (session) {
+      sessions.add(session);
+    }
+  }
+  return sessions;
+}
+
+export function isCodexAgentCommand(command: string[]): boolean {
+  if (command.length === 0) {
+    return false;
+  }
+
+  const executable = command[0];
+  const executableName = basename(executable);
+  const codexIndex =
+    executableName === "node" && isCodexExecutable(command[1])
+      ? 1
+      : isCodexExecutable(executable)
+        ? 0
+        : -1;
+
+  if (codexIndex === -1) {
+    return false;
+  }
+
+  const subcommand = command[codexIndex + 1];
+  if (!subcommand || subcommand.startsWith("-")) {
+    return true;
+  }
+
+  return !NON_AGENT_CODEX_SUBCOMMANDS.has(subcommand);
 }
 
 async function findThreadSessionPath(
@@ -85,6 +160,67 @@ async function findThreadSessionFileName(
     .sort();
 
   return matches.at(-1) ?? null;
+}
+
+async function findLatestShellSnapshotPath(
+  codexHome: string,
+  thread: AppServerThread,
+): Promise<string | null> {
+  let entries: Dirent[];
+  const snapshotDir = join(codexHome, "shell_snapshots");
+  try {
+    entries = await readdir(snapshotDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const matches = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => name.startsWith(`${thread.id}.`) && name.endsWith(".sh"))
+    .sort();
+
+  const newest = matches.at(-1);
+  if (!newest) {
+    return null;
+  }
+  return join(snapshotDir, newest);
+}
+
+async function isThreadOrphaned(
+  thread: AppServerThread,
+  codexHome: string,
+  liveSessions: Set<string> | null,
+): Promise<boolean> {
+  if (!liveSessions) {
+    return false;
+  }
+  const snapshotPath = await findLatestShellSnapshotPath(codexHome, thread);
+  if (!snapshotPath) {
+    return false;
+  }
+  const wtSession = await readWtSessionFromSnapshot(snapshotPath);
+  if (!wtSession) {
+    return false;
+  }
+  return !liveSessions.has(wtSession);
+}
+
+function withOrphanedActiveStatus(status: unknown): AppServerThread["status"] {
+  if (!isActiveThreadStatus(status)) {
+    return {
+      type: "active",
+      activeFlags: ["orphanedSession"],
+    };
+  }
+
+  const activeFlags = Array.isArray(status.activeFlags)
+    ? status.activeFlags.filter((flag) => flag !== "orphanedSession")
+    : [];
+  return {
+    ...status,
+    type: "active",
+    activeFlags: [...activeFlags, "orphanedSession"],
+  };
 }
 
 async function hasUnresolvedEscalationCall(sessionPath: string): Promise<boolean> {
@@ -143,6 +279,10 @@ function isApprovalEvidenceCandidate(thread: AppServerThread): boolean {
 
   const lastTurn = selectLatestTurn(thread);
   return lastTurn?.status === "inProgress" || lastTurn?.status === "interrupted";
+}
+
+function isWorkingThread(thread: AppServerThread): boolean {
+  return isActiveThreadStatus(thread.status) || hasActiveTurnEvidence(thread);
 }
 
 function withWaitingApprovalStatus(thread: AppServerThread): AppServerThread {
@@ -216,6 +356,19 @@ function selectLatestTurn(thread: AppServerThread): AppServerThread["turns"][num
   return latest;
 }
 
+function hasActiveTurnEvidence(thread: AppServerThread): boolean {
+  const lastTurn = selectLatestTurn(thread);
+  if (!lastTurn) {
+    return false;
+  }
+
+  if (lastTurn.status === "inProgress") {
+    return true;
+  }
+
+  return lastTurn.status === "interrupted" && lastTurn.completedAt == null;
+}
+
 function hasWaitingApprovalFlag(status: unknown): boolean {
   return isActiveThreadStatus(status) && status.activeFlags?.includes("waitingOnApproval") === true;
 }
@@ -257,6 +410,10 @@ function getStringProperty(
   return typeof propertyValue === "string" ? propertyValue : null;
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -266,6 +423,116 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+async function listCodexAgentProcessIds(): Promise<number[] | null> {
+  let response;
+  try {
+    response = await execFile("pgrep", ["-f", "codex"], { encoding: "utf8" });
+  } catch (error) {
+    if (isProcessSearchNoMatch(error)) {
+      return [];
+    }
+    return null;
+  }
+
+  const stdout = response.stdout ?? "";
+  const processIds = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) => line.split(/\s+/, 1)[0])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  const codexAgentProcessIds: number[] = [];
+  for (const processId of processIds) {
+    const command = await readProcCmdline(processId);
+    if (command && isCodexAgentCommand(command)) {
+      codexAgentProcessIds.push(processId);
+    }
+  }
+  return codexAgentProcessIds;
+}
+
+async function readProcWtSession(processId: number): Promise<string | null> {
+  let environ;
+  try {
+    environ = await readFile(`/proc/${processId}/environ`, "utf8");
+  } catch {
+    return null;
+  }
+
+  for (const variable of environ.split("\0")) {
+    if (variable.startsWith("WT_SESSION=")) {
+      return variable.slice("WT_SESSION=".length);
+    }
+  }
+  return null;
+}
+
+async function readProcCmdline(processId: number): Promise<string[] | null> {
+  let cmdline;
+  try {
+    cmdline = await readFile(`/proc/${processId}/cmdline`, "utf8");
+  } catch {
+    return null;
+  }
+
+  const command = cmdline.split("\0").filter((value) => value.length > 0);
+  return command.length > 0 ? command : null;
+}
+
+async function readWtSessionFromSnapshot(path: string): Promise<string | null> {
+  let content;
+  try {
+    content = await readFile(path, "utf8");
+  } catch {
+    return null;
+  }
+
+  for (const line of content.split(/\r?\n/)) {
+    if (line.startsWith("WT_SESSION=")) {
+      return line.slice("WT_SESSION=".length).trim();
+    }
+    if (line.startsWith("declare -x WT_SESSION=")) {
+      const value = line.slice("declare -x WT_SESSION=".length).trim();
+      if (
+        (value.startsWith("\"") && value.endsWith("\"")) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        return value.slice(1, -1);
+      }
+      return value;
+    }
+  }
+  return null;
+}
+
+const NON_AGENT_CODEX_SUBCOMMANDS = new Set([
+  "app-server",
+  "apply",
+  "cloud",
+  "completion",
+  "debug",
+  "doctor",
+  "features",
+  "help",
+  "login",
+  "logout",
+  "mcp",
+  "mcp-server",
+  "plugin",
+  "remote-control",
+  "sandbox",
+  "update",
+]);
+
+function isCodexExecutable(value: string | undefined): boolean {
+  return basename(value ?? "") === "codex";
+}
+
+function basename(value: string): string {
+  return value.split("/").at(-1) ?? value;
+}
+
+function isProcessSearchNoMatch(error: unknown): boolean {
+  return isObject(error) && error.code === 1;
 }

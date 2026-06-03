@@ -235,7 +235,7 @@ test("GET /ui serves the Web frontend HTML", async () => {
     assert.equal(bare.headers.get("content-type"), "text/html; charset=utf-8");
     assert.equal(bare.headers.get("cache-control"), "no-cache");
     const html = await bare.text();
-    assert.match(html, /<title>Codex Status<\/title>/);
+    assert.match(html, /<title>AgentBoard<\/title>/);
     assert.match(html, /id="table-view-button"/);
     assert.match(html, /id="office-view-button"/);
     assert.match(html, /id="table-view"/);
@@ -314,6 +314,106 @@ test("GET /ui assets render sub agents as subordinate office workers", async () 
     assert.match(styles, /\.office-pod__team-grid/);
     assert.match(styles, /\.office-pod__team-grid \{[^}]*overflow: auto;/);
     assert.match(styles, /\.office-agent\[data-role="sub"\]/);
+  });
+});
+
+test("GET /ui assets render detailed office workers with graphic status signals", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(script, /office-agent__chair/);
+    assert.match(script, /office-agent__hair/);
+    assert.match(script, /office-agent__status-light/);
+    assert.match(script, /office-agent__status-glyph/);
+    assert.match(script, /office-agent__screen-line/);
+    assert.match(script, /office-agent__desk-leg/);
+    assert.match(script, /office-agent__desk-mug/);
+
+    assert.match(styles, /\.office-agent\[data-status="working"\] \.office-agent__status-light/);
+    assert.match(styles, /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-glyph/);
+    assert.match(styles, /\.office-agent\[data-status="waiting_input"\] \.office-agent__bubble/);
+    assert.match(styles, /\.office-agent\[data-status="error"\] \.office-agent__status-light/);
+    assert.match(styles, /\.office-agent\[data-status="finished"\] \.office-agent__status-glyph/);
+    assert.match(styles, /\.office-agent\[data-role="sub"\][\s\S]*?opacity: 0\.78;/);
+    assert.match(styles, /\.office-agent\[data-role="sub"\] \.office-agent__status-light/);
+  });
+});
+
+test("GET /ui assets preserve scroll when selecting office agents", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+
+    assert.match(
+      script,
+      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?state\.expandedAgentId = state\.expandedAgentId === agent\.id \? null : agent\.id;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
+    );
+  });
+});
+
+test("GET /ui assets use simplified office ordering without previous-position state", async () => {
+  await withServer(async (baseUrl) => {
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+
+    assert.doesNotMatch(script, /officePodOrder:\s*\[\]/);
+    assert.doesNotMatch(script, /officeAgentOrder:\s*\[\]/);
+    assert.match(script, /buildOfficePods\(visibleAgents\);/);
+    assert.doesNotMatch(script, /previousPodIds/);
+    assert.doesNotMatch(script, /previousAgentIds/);
+    assert.doesNotMatch(script, /rememberOfficeOrder/);
+  });
+});
+
+test("GET /ui assets render dismissible office status alerts", async () => {
+  await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/ui`)).text();
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(html, /id="office-alerts"/);
+    assert.match(html, /aria-live="assertive"/);
+    assert.match(script, /findMainAgentStatusAlerts/);
+    assert.match(script, /agentStatuses:\s*new Map\(\)/);
+    assert.match(script, /officeAlerts:\s*\[\]/);
+    assert.match(script, /queueOfficeAlerts\(/);
+    assert.match(script, /renderOfficeAlertSummary/);
+    assert.match(script, /renderOfficeAlert/);
+    assert.match(script, /state\.officeAlerts = \[\];/);
+    assert.match(script, /state\.officeAlerts = state\.officeAlerts\.filter\(\(item\) => item\.id !== alert\.id\);/);
+    assert.match(styles, /\.office-alerts/);
+    assert.match(styles, /\.office-alerts__summary/);
+    assert.match(styles, /\.office-alerts__close-all/);
+    assert.match(styles, /\.office-alert/);
+    assert.match(styles, /\.office-alert__close/);
+  });
+});
+
+test("GET /ui styles give office statuses distinct graphic treatments", async () => {
+  await withServer(async (baseUrl) => {
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-light \{[\s\S]*?background: #f59f2f;/,
+    );
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="waiting_input"\] \.office-agent__status-light \{[\s\S]*?background: #3d8bfd;/,
+    );
+    assert.doesNotMatch(
+      styles,
+      /\.office-agent\[data-status="waiting_approval"\] \.office-agent__status-light,\s*\.office-agent\[data-status="waiting_input"\] \.office-agent__status-light/,
+    );
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="unknown"\] \.office-agent__monitor \{[\s\S]*?repeating-linear-gradient/,
+    );
+    assert.match(styles, /\.office-agent\[data-status="idle"\] \.office-agent__screen-line/);
+    assert.match(
+      styles,
+      /\.office-agent\[data-status="finished"\] \.office-agent__monitor \{[\s\S]*?#a7d8ff;/,
+    );
+    assert.match(styles, /\.office-agent\[data-status="finished"\] \.office-agent__bubble/);
   });
 });
 

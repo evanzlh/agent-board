@@ -3,6 +3,7 @@ import {
   buildAgentRows,
   buildOfficePods,
   compactJson,
+  findMainAgentStatusAlerts,
   filterAgents,
   formatTimestamp,
   safeJson,
@@ -24,6 +25,9 @@ const state = {
   },
   expandedAgentId: null,
   expandedParentIds: new Set(),
+  agentStatuses: new Map(),
+  officeAlerts: [],
+  nextOfficeAlertId: 1,
   activeView: "table",
   autoRefreshEnabled: true,
   isLoading: false,
@@ -46,6 +50,7 @@ const elements = {
   officeView: requiredElement("office-view"),
   officeVisibleCount: requiredElement("office-visible-count"),
   officeGeneratedAt: requiredElement("office-generated-at"),
+  officeAlerts: requiredElement("office-alerts"),
   officeBody: requiredElement("office-body"),
   officeDetail: requiredElement("office-detail"),
   statusFilter: requiredElement("status-filter"),
@@ -126,8 +131,11 @@ async function loadSnapshot() {
     }
 
     if (statusResult.status === "fulfilled") {
+      const nextAgents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
       state.summary = statusResult.value.summary ?? null;
-      state.agents = Array.isArray(statusResult.value.agents) ? statusResult.value.agents : [];
+      queueOfficeAlerts(findMainAgentStatusAlerts(nextAgents, state.agentStatuses));
+      state.agents = nextAgents;
+      rememberAgentStatuses(nextAgents);
       state.generatedAt = statusResult.value.generatedAt ?? null;
       succeeded = true;
       if (state.expandedAgentId && !state.agents.some((agent) => agent.id === state.expandedAgentId)) {
@@ -179,6 +187,7 @@ function render() {
   renderError();
   renderSummary();
   renderActiveView();
+  renderOfficeAlerts();
 }
 
 function renderHealth() {
@@ -298,7 +307,8 @@ function renderOffice() {
     return;
   }
 
-  elements.officeBody.replaceChildren(...buildOfficePods(visibleAgents).map(renderOfficePod));
+  const pods = buildOfficePods(visibleAgents);
+  elements.officeBody.replaceChildren(...pods.map(renderOfficePod));
   renderOfficeDetail(visibleAgents);
 }
 
@@ -384,18 +394,31 @@ function renderOfficeAgent(agent, role) {
   button.title = `${valueOrEmpty(agent.displayName)} · ${valueOrEmpty(agent.status)} · ${valueOrEmpty(agent.cwd)}`;
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => {
+    const scrollPosition = captureScrollPosition();
     state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
     renderActiveView();
+    restoreScrollPosition(scrollPosition);
   });
 
   const bubble = document.createElement("span");
   bubble.className = "office-agent__bubble";
   bubble.textContent = officeAgentBubble(agent.status);
 
+  const statusLight = span("office-agent__status-light", "");
+
+  const chair = span("office-agent__chair", "");
+
   const avatar = document.createElement("span");
   avatar.className = "office-agent__avatar";
+  const head = span("office-agent__head", "");
+  head.append(
+    span("office-agent__hair", ""),
+    span("office-agent__face", ""),
+    span("office-agent__headset", ""),
+  );
   avatar.append(
-    span("office-agent__head", ""),
+    head,
+    span("office-agent__neck", ""),
     span("office-agent__body", ""),
     span("office-agent__arm office-agent__arm--left", ""),
     span("office-agent__arm office-agent__arm--right", ""),
@@ -403,7 +426,21 @@ function renderOfficeAgent(agent, role) {
 
   const desk = document.createElement("span");
   desk.className = "office-agent__desk";
-  desk.append(span("office-agent__monitor", ""), span("office-agent__keyboard", ""));
+  const monitor = span("office-agent__monitor", "");
+  monitor.append(
+    span("office-agent__status-glyph", officeAgentStatusGlyph(agent.status)),
+    span("office-agent__screen-line office-agent__screen-line--primary", ""),
+    span("office-agent__screen-line office-agent__screen-line--secondary", ""),
+    span("office-agent__screen-line office-agent__screen-line--tertiary", ""),
+  );
+  desk.append(
+    monitor,
+    span("office-agent__keyboard", ""),
+    span("office-agent__trackpad", ""),
+    span("office-agent__desk-mug", ""),
+    span("office-agent__desk-leg office-agent__desk-leg--left", ""),
+    span("office-agent__desk-leg office-agent__desk-leg--right", ""),
+  );
 
   const label = document.createElement("span");
   label.className = "office-agent__label";
@@ -413,7 +450,7 @@ function renderOfficeAgent(agent, role) {
   status.className = "office-agent__status";
   status.textContent = valueOrEmpty(agent.status);
 
-  button.append(bubble, avatar, desk, label, status);
+  button.append(bubble, statusLight, chair, avatar, desk, label, status, span("office-agent__floor-shadow", ""));
   return button;
 }
 
@@ -431,6 +468,28 @@ function officeAgentBubble(status) {
     return "done";
   }
   return "";
+}
+
+function officeAgentStatusGlyph(status) {
+  if (status === "working") {
+    return "RUN";
+  }
+  if (status === "waiting_approval") {
+    return "OK?";
+  }
+  if (status === "waiting_input") {
+    return "IN?";
+  }
+  if (status === "error") {
+    return "ERR";
+  }
+  if (status === "finished") {
+    return "DONE";
+  }
+  if (status === "idle") {
+    return "IDLE";
+  }
+  return "?";
 }
 
 function renderOfficeDetail(visibleAgents) {
@@ -457,6 +516,72 @@ function renderOfficeDetail(visibleAgents) {
   );
 
   elements.officeDetail.replaceChildren(title, meta);
+}
+
+function renderOfficeAlerts() {
+  if (state.officeAlerts.length === 0) {
+    elements.officeAlerts.replaceChildren();
+    return;
+  }
+  elements.officeAlerts.replaceChildren(renderOfficeAlertSummary(), ...state.officeAlerts.map(renderOfficeAlert));
+}
+
+function renderOfficeAlertSummary() {
+  const summary = document.createElement("div");
+  summary.className = "office-alerts__summary";
+
+  const count = document.createElement("span");
+  count.textContent = `${state.officeAlerts.length} alert${state.officeAlerts.length === 1 ? "" : "s"}`;
+
+  const closeAll = document.createElement("button");
+  closeAll.type = "button";
+  closeAll.className = "office-alerts__close-all";
+  closeAll.textContent = "Close all";
+  closeAll.setAttribute("aria-label", "Close all office status alerts");
+  closeAll.addEventListener("click", () => {
+    state.officeAlerts = [];
+    renderOfficeAlerts();
+  });
+
+  summary.append(count, closeAll);
+  return summary;
+}
+
+function renderOfficeAlert(alert) {
+  const article = document.createElement("article");
+  article.className = "office-alert";
+  article.dataset.status = alert.status;
+  article.setAttribute("role", "alert");
+
+  const copy = document.createElement("div");
+  copy.className = "office-alert__copy";
+
+  const title = document.createElement("strong");
+  title.className = "office-alert__title";
+  title.textContent = officeAlertTitle(alert.status);
+
+  const message = document.createElement("span");
+  message.className = "office-alert__message";
+  message.textContent = `${alert.displayName} moved from working to ${alert.status}.`;
+
+  copy.append(title, message);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "office-alert__close";
+  close.textContent = "Close";
+  close.setAttribute("aria-label", `Close ${alert.displayName} status alert`);
+  close.addEventListener("click", () => {
+    state.officeAlerts = state.officeAlerts.filter((item) => item.id !== alert.id);
+    renderOfficeAlerts();
+  });
+
+  article.append(copy, close);
+  return article;
+}
+
+function officeAlertTitle(status) {
+  return status === "waiting_approval" ? "Approval required" : "Main agent finished";
 }
 
 function detailPair(label, value) {
@@ -672,4 +797,17 @@ function pruneExpandedParentIds() {
       state.expandedParentIds.delete(id);
     }
   }
+}
+
+function queueOfficeAlerts(transitions) {
+  state.officeAlerts.push(
+    ...transitions.map((transition) => ({
+      ...transition,
+      id: `office-alert-${state.nextOfficeAlertId++}`,
+    })),
+  );
+}
+
+function rememberAgentStatuses(agents) {
+  state.agentStatuses = new Map(agents.map((agent) => [agent.id, agent.status]));
 }

@@ -5,6 +5,7 @@ import {
   buildAgentRows,
   buildOfficePods,
   compactJson,
+  findMainAgentStatusAlerts,
   filterAgents,
   formatTimestamp,
   safeJson,
@@ -110,6 +111,79 @@ test("filterAgents filters by active window using thread and turn timestamps", (
   );
 });
 
+test("findMainAgentStatusAlerts reports main agents moving from working to terminal or approval states", () => {
+  const previousStatuses = new Map([
+    ["main-finished", "working"],
+    ["main-approval", "working"],
+    ["main-input", "working"],
+    ["sub-approval", "working"],
+    ["main-idle", "idle"],
+  ]);
+  const agents = [
+    {
+      ...baseAgent,
+      id: "main-finished",
+      kind: "main_agent",
+      displayName: "Finished Lead",
+      status: "finished",
+    },
+    {
+      ...baseAgent,
+      id: "main-approval",
+      kind: "main_agent",
+      displayName: "Approval Lead",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-input",
+      kind: "main_agent",
+      status: "waiting_input",
+    },
+    {
+      ...baseAgent,
+      id: "sub-approval",
+      kind: "sub_agent",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-idle",
+      kind: "main_agent",
+      status: "waiting_approval",
+    },
+    {
+      ...baseAgent,
+      id: "main-new",
+      kind: "main_agent",
+      status: "finished",
+    },
+  ];
+
+  assert.deepEqual(
+    findMainAgentStatusAlerts(agents, previousStatuses).map((alert) => ({
+      agentId: alert.agentId,
+      displayName: alert.displayName,
+      previousStatus: alert.previousStatus,
+      status: alert.status,
+    })),
+    [
+      {
+        agentId: "main-finished",
+        displayName: "Finished Lead",
+        previousStatus: "working",
+        status: "finished",
+      },
+      {
+        agentId: "main-approval",
+        displayName: "Approval Lead",
+        previousStatus: "working",
+        status: "waiting_approval",
+      },
+    ],
+  );
+});
+
 test("buildAgentRows nests visible sub agents under their parent rows", () => {
   const parent = {
     ...baseAgent,
@@ -187,6 +261,163 @@ test("buildOfficePods groups visible main agents with their sub agents", () => {
   ]);
 });
 
+test("buildOfficePods sorts pods by simple status priority and newest creation time", () => {
+  const idleRecent = {
+    ...baseAgent,
+    id: "main-idle-recent",
+    kind: "main_agent",
+    status: "idle",
+    createdAt: 1780010600000,
+  };
+  const finishedRecent = {
+    ...baseAgent,
+    id: "main-finished-recent",
+    kind: "main_agent",
+    status: "finished",
+    createdAt: 1780010500000,
+  };
+  const workingOld = {
+    ...baseAgent,
+    id: "main-working-old",
+    kind: "main_agent",
+    status: "working",
+    createdAt: 1780010100000,
+  };
+  const approvalRecent = {
+    ...baseAgent,
+    id: "main-approval-recent",
+    kind: "main_agent",
+    status: "waiting_approval",
+    createdAt: 1780010400000,
+  };
+  const unknownNewest = {
+    ...baseAgent,
+    id: "main-unknown-newest",
+    kind: "main_agent",
+    status: "unknown",
+    createdAt: 1780010700000,
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(
+      buildOfficePods([unknownNewest, idleRecent, finishedRecent, workingOld, approvalRecent], {
+        previousPodIds: [
+          "main-unknown-newest",
+          "main-idle-recent",
+          "main-finished-recent",
+          "main-working-old",
+          "main-approval-recent",
+        ],
+      }),
+    ).map((pod) => pod.id),
+    [
+      "main-approval-recent",
+      "main-working-old",
+      "main-finished-recent",
+      "main-idle-recent",
+      "main-unknown-newest",
+    ],
+  );
+});
+
+test("buildOfficePods sorts sub agents by simple status priority and newest creation time", () => {
+  const parent = {
+    ...baseAgent,
+    id: "main-parent",
+    kind: "main_agent",
+    status: "idle",
+    createdAt: 1780010000000,
+  };
+  const unknownNewest = {
+    ...baseAgent,
+    id: "sub-unknown-newest",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "unknown",
+    createdAt: 1780010700000,
+  };
+  const idleRecent = {
+    ...baseAgent,
+    id: "sub-idle-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "idle",
+    createdAt: 1780010600000,
+  };
+  const finishedRecent = {
+    ...baseAgent,
+    id: "sub-finished-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "finished",
+    createdAt: 1780010500000,
+  };
+  const workingOld = {
+    ...baseAgent,
+    id: "sub-working-old",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "working",
+    createdAt: 1780010100000,
+  };
+  const approvalRecent = {
+    ...baseAgent,
+    id: "sub-approval-recent",
+    kind: "sub_agent",
+    parentThreadId: "main-parent",
+    status: "waiting_approval",
+    createdAt: 1780010400000,
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(
+      buildOfficePods([parent, unknownNewest, idleRecent, finishedRecent, workingOld, approvalRecent], {
+        previousAgentIds: [
+          "sub-unknown-newest",
+          "sub-idle-recent",
+          "sub-finished-recent",
+          "sub-working-old",
+          "sub-approval-recent",
+        ],
+      }),
+    )[0].children,
+    [
+      "sub-approval-recent",
+      "sub-working-old",
+      "sub-finished-recent",
+      "sub-idle-recent",
+      "sub-unknown-newest",
+    ],
+  );
+});
+
+test("buildOfficePods lets active sub agents lift their main pod", () => {
+  const idleParent = {
+    ...baseAgent,
+    id: "main-idle",
+    kind: "main_agent",
+    status: "idle",
+  };
+  const approvalChild = {
+    ...baseAgent,
+    id: "sub-approval",
+    kind: "sub_agent",
+    parentThreadId: "main-idle",
+    status: "waiting_approval",
+  };
+  const workingParent = {
+    ...baseAgent,
+    id: "main-working",
+    kind: "main_agent",
+    status: "working",
+  };
+
+  assert.deepEqual(
+    summarizeOfficePods(buildOfficePods([workingParent, approvalChild, idleParent])).map((pod) => pod.id),
+    ["main-idle", "main-working"],
+  );
+});
+
 test("buildOfficePods groups visible sub agents without visible parents into an unassigned pod", () => {
   const child = {
     ...baseAgent,
@@ -204,8 +435,8 @@ test("buildOfficePods groups visible sub agents without visible parents into an 
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([child, parent])), [
-    { id: "unassigned-sub-agents", type: "unassigned", agentId: null, children: ["sub-orphan"] },
     { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+    { id: "unassigned-sub-agents", type: "unassigned", agentId: null, children: ["sub-orphan"] },
   ]);
 });
 
@@ -226,8 +457,8 @@ test("buildOfficePods groups rootless unknown agents into an other pod", () => {
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([unknown, parent])), [
-    { id: "other-agents", type: "other", agentId: null, children: ["unknown-1"] },
     { id: "main-visible", type: "main", agentId: "main-visible", children: [] },
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-1"] },
   ]);
 });
 
@@ -255,8 +486,8 @@ test("buildOfficePods keeps non-sub agents with visible parents in the other pod
   };
 
   assert.deepEqual(summarizeOfficePods(buildOfficePods([nestedUnknown, parent, rootlessUnknown])), [
-    { id: "other-agents", type: "other", agentId: null, children: ["unknown-nested", "unknown-rootless"] },
     { id: "main-1", type: "main", agentId: "main-1", children: [] },
+    { id: "other-agents", type: "other", agentId: null, children: ["unknown-nested", "unknown-rootless"] },
   ]);
 });
 

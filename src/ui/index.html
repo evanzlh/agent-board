@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Codex Status</title>
+    <title>AgentBoard</title>
     <link rel="stylesheet" href="/ui/styles.css">
   </head>
   <body>
     <main class="app-shell">
       <header class="topbar">
         <div class="topbar__identity">
-          <h1>Codex Status</h1>
+          <h1>AgentBoard</h1>
           <p id="health-line" class="muted">Loading health...</p>
         </div>
         <div class="topbar__actions">
@@ -113,6 +113,12 @@
           <strong id="office-visible-count">0 agents</strong>
           <span id="office-generated-at" class="muted">No snapshot loaded</span>
         </div>
+        <section
+          id="office-alerts"
+          class="office-alerts"
+          aria-label="Office status alerts"
+          aria-live="assertive"
+        ></section>
         <div id="office-body" class="office-body">
           <div class="empty-state">Loading agents...</div>
         </div>

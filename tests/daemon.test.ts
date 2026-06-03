@@ -76,7 +76,7 @@ test("startDaemon wires supervisor, client, store, and http api", async () => {
       host: "127.0.0.1",
       port: 0,
       autoStartAppServer: true,
-      refreshIntervalMs: 100,
+      refreshIntervalMs: 60_000,
       staleAfterMs: 1000,
     },
     now: () => 1000,
