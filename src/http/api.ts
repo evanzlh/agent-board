@@ -1,14 +1,17 @@
 import { readFile } from "node:fs/promises";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentFilters, StatusStore, StoreEvent } from "../store/status-store.ts";
+import type { AgentStatus } from "../domain/types.ts";
 
 export type HttpApiOptions = {
   host: string;
   port: number;
   store: StatusStore;
   uiAssets?: ReadonlyMap<string, UiAsset>;
+  sessionReader?: AgentSessionReader;
 };
 
 export type HttpApi = {
@@ -22,15 +25,25 @@ export type UiAsset = {
   contentType: string;
 };
 
+export type AgentSessionReader = {
+  readAgentSessionEvents: (agent: AgentStatus) => Promise<unknown[] | null>;
+};
+
 const UI_INDEX_PATH = fileURLToPath(new URL("../ui/index.html", import.meta.url));
+const UI_AGENT_INDEX_PATH = fileURLToPath(new URL("../ui/agent.html", import.meta.url));
 const UI_APP_PATH = fileURLToPath(new URL("../ui/app.js", import.meta.url));
+const UI_AGENT_APP_PATH = fileURLToPath(new URL("../ui/agent.js", import.meta.url));
 const UI_VIEW_MODEL_PATH = fileURLToPath(new URL("../ui/view-model.js", import.meta.url));
 const UI_STYLES_PATH = fileURLToPath(new URL("../ui/styles.css", import.meta.url));
+const EUPHONY_ASSET_PREFIX = "/ui/vendor/euphony/";
+const EUPHONY_LIB_ROOT = fileURLToPath(new URL("../ui/vendor/euphony/", import.meta.url));
 
 const UI_ASSETS = new Map<string, UiAsset>([
   ["/ui", { path: UI_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
   ["/ui/", { path: UI_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
+  ["/ui/agent.html", { path: UI_AGENT_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
   ["/ui/app.js", { path: UI_APP_PATH, contentType: "text/javascript; charset=utf-8" }],
+  ["/ui/agent.js", { path: UI_AGENT_APP_PATH, contentType: "text/javascript; charset=utf-8" }],
   [
     "/ui/view-model.js",
     { path: UI_VIEW_MODEL_PATH, contentType: "text/javascript; charset=utf-8" },
@@ -42,7 +55,7 @@ export function createHttpApi(options: HttpApiOptions): HttpApi {
   const sseClients = new Set<http.ServerResponse>();
   const uiAssets = options.uiAssets ?? UI_ASSETS;
   const server = http.createServer((request, response) => {
-    void handleRequest(options.store, uiAssets, sseClients, request, response);
+    void handleRequest(options.store, uiAssets, options.sessionReader, sseClients, request, response);
   });
 
   const onStoreEvent = (event: StoreEvent): void => {
@@ -88,6 +101,7 @@ export function createHttpApi(options: HttpApiOptions): HttpApi {
 async function handleRequest(
   store: StatusStore,
   uiAssets: ReadonlyMap<string, UiAsset>,
+  sessionReader: AgentSessionReader | undefined,
   sseClients: Set<http.ServerResponse>,
   request: http.IncomingMessage,
   response: http.ServerResponse,
@@ -105,6 +119,9 @@ async function handleRequest(
 
   const rawPathname = request.url?.split("?", 1)[0] ?? "/";
   if (await sendUiAsset(rawPathname, uiAssets, response)) {
+    return;
+  }
+  if (await sendEuphonyAsset(rawPathname, response)) {
     return;
   }
 
@@ -125,6 +142,38 @@ async function handleRequest(
 
   if (url.pathname === "/agents") {
     sendJson(response, 200, store.getAgents(parseFilters(url)));
+    return;
+  }
+
+  const sessionAgentId = decodeAgentSessionPath(url.pathname);
+  if (sessionAgentId !== undefined) {
+    if (sessionAgentId === null) {
+      sendJson(response, 400, { error: "bad_request", message: "malformed_agent_id" });
+      return;
+    }
+    const agent = store.getAgent(sessionAgentId);
+    if (!agent) {
+      sendJson(response, 404, { error: "agent_not_found", id: sessionAgentId });
+      return;
+    }
+    if (!sessionReader) {
+      sendJson(response, 503, { error: "session_reader_unavailable", id: sessionAgentId });
+      return;
+    }
+    try {
+      const events = await sessionReader.readAgentSessionEvents(agent);
+      if (!events) {
+        sendJson(response, 404, { error: "session_not_found", id: sessionAgentId });
+        return;
+      }
+      sendJson(response, 200, { agent, events });
+    } catch {
+      sendJson(response, 500, {
+        error: "session_unavailable",
+        id: sessionAgentId,
+        message: "Session unavailable",
+      });
+    }
     return;
   }
 
@@ -184,6 +233,69 @@ async function sendUiAsset(
   return true;
 }
 
+async function sendEuphonyAsset(
+  pathname: string,
+  response: http.ServerResponse,
+): Promise<boolean> {
+  if (!pathname.startsWith(EUPHONY_ASSET_PREFIX)) {
+    return false;
+  }
+
+  const assetPath = resolveEuphonyAssetPath(pathname);
+  if (!assetPath) {
+    sendJson(response, 404, { error: "not_found" });
+    return true;
+  }
+  const contentType = contentTypeForUiPath(assetPath);
+  if (!contentType) {
+    sendJson(response, 404, { error: "not_found" });
+    return true;
+  }
+
+  try {
+    const body = await readFile(assetPath);
+    response.writeHead(200, {
+      "content-type": contentType,
+      "cache-control": "no-cache",
+    });
+    response.end(body);
+  } catch {
+    sendJson(response, 404, { error: "not_found" });
+  }
+  return true;
+}
+
+function resolveEuphonyAssetPath(pathname: string): string | null {
+  const encodedRelativePath = pathname.slice(EUPHONY_ASSET_PREFIX.length);
+  let relativePath;
+  try {
+    relativePath = decodeURIComponent(encodedRelativePath);
+  } catch {
+    return null;
+  }
+  if (
+    !relativePath ||
+    relativePath.startsWith("/") ||
+    relativePath.split("/").some((part) => part.length === 0 || part === "..")
+  ) {
+    return null;
+  }
+
+  const root = resolve(EUPHONY_LIB_ROOT);
+  const assetPath = resolve(root, relativePath);
+  return assetPath.startsWith(`${root}${sep}`) ? assetPath : null;
+}
+
+function contentTypeForUiPath(path: string): string | null {
+  if (extname(path) === ".js") {
+    return "text/javascript; charset=utf-8";
+  }
+  if (extname(path) === ".css") {
+    return "text/css; charset=utf-8";
+  }
+  return null;
+}
+
 function parseFilters(url: URL): AgentFilters {
   const filters: AgentFilters = {};
   const status = url.searchParams.get("status");
@@ -203,6 +315,15 @@ function parseFilters(url: URL): AgentFilters {
     filters.activeWithinMs = activeWithinMs;
   }
   return filters;
+}
+
+function decodeAgentSessionPath(pathname: string): string | null | undefined {
+  const prefix = "/agents/";
+  const suffix = "/session";
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(suffix)) {
+    return undefined;
+  }
+  return decodePathSegment(pathname.slice(prefix.length, -suffix.length));
 }
 
 function readPositiveNumber(value: string | null): number | null {

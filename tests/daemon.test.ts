@@ -14,6 +14,7 @@ class FakeClient extends EventEmitter {
   initializeError: Error | null = null;
   initializeLatch: Promise<void> | null = null;
   threads: AppServerThread[] = [];
+  sessionEvents: unknown[] | null = null;
 
   async initialize(): Promise<void> {
     this.initializeCalls += 1;
@@ -28,6 +29,10 @@ class FakeClient extends EventEmitter {
   async readInitialState(): Promise<{ threads: AppServerThread[]; loadedThreadIds: [] }> {
     this.readCalls += 1;
     return { threads: this.threads, loadedThreadIds: [] };
+  }
+
+  async readAgentSessionEvents(): Promise<unknown[] | null> {
+    return this.sessionEvents;
   }
 }
 
@@ -177,6 +182,47 @@ test("startDaemon applies client notifications to the status store", async () =>
   assert.equal(agent.status, "waiting_approval");
 
   await daemon.stop();
+});
+
+test("startDaemon exposes current client session events through the HTTP API", async () => {
+  const client = new FakeClient();
+  client.threads = [thread("one", { type: "idle" })];
+  client.sessionEvents = [
+    { type: "session_meta", payload: { id: "session-one" } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [] } },
+  ];
+  const daemon = await startDaemon({
+    config: {
+      host: "127.0.0.1",
+      port: 0,
+      autoStartAppServer: true,
+      refreshIntervalMs: 100,
+      staleAfterMs: 1000,
+    },
+    now: () => 1000,
+    supervisor: {
+      async start() {
+        return {
+          mode: "managed-child",
+          cliVersion: "codex-cli 0.135.0",
+          process: { kill: () => true },
+          stop: () => {},
+        };
+      },
+    },
+    clientFactory: () => client,
+  });
+
+  try {
+    const response = await fetch(`${daemon.url}/agents/one/session`);
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.agent.id, "one");
+    assert.deepEqual(body.events, client.sessionEvents);
+  } finally {
+    await daemon.stop();
+  }
 });
 
 test("daemon refreshes connected app server snapshots on the refresh interval", async () => {

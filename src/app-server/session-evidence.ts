@@ -1,10 +1,11 @@
 import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
-import { access, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
 import { normalizeTimestampMs } from "../domain/mapper.ts";
 import type { AppServerThread } from "../domain/types.ts";
+import { findThreadSessionPath } from "./session-files.ts";
 
 const execFile = promisify(execFileCallback);
 
@@ -111,55 +112,6 @@ export function isCodexAgentCommand(command: string[]): boolean {
   }
 
   return !NON_AGENT_CODEX_SUBCOMMANDS.has(subcommand);
-}
-
-async function findThreadSessionPath(
-  codexHome: string,
-  thread: AppServerThread,
-): Promise<string | null> {
-  if (typeof thread.path === "string" && thread.path.endsWith(".jsonl")) {
-    if (await fileExists(thread.path)) {
-      return thread.path;
-    }
-  }
-
-  const dates = sessionDateCandidates(thread);
-  for (const dateParts of dates) {
-    const dir = join(codexHome, "sessions", ...dateParts);
-    const fileName = await findThreadSessionFileName(dir, thread);
-    if (fileName) {
-      return join(dir, fileName);
-    }
-  }
-
-  return null;
-}
-
-async function findThreadSessionFileName(
-  dir: string,
-  thread: AppServerThread,
-): Promise<string | null> {
-  let entries: Dirent[];
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-
-  const identifiers = [thread.sessionId, thread.id].filter(
-    (identifier): identifier is string => typeof identifier === "string" && identifier.length > 0,
-  );
-  const matches = entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .filter(
-      (fileName) =>
-        fileName.endsWith(".jsonl") &&
-        identifiers.some((identifier) => fileName.includes(identifier)),
-    )
-    .sort();
-
-  return matches.at(-1) ?? null;
 }
 
 async function findLatestShellSnapshotPath(
@@ -298,42 +250,6 @@ function withWaitingApprovalStatus(thread: AppServerThread): AppServerThread {
   };
 }
 
-function sessionDateCandidates(thread: AppServerThread): string[][] {
-  const candidates = new Map<string, string[]>();
-  for (const value of [thread.createdAt, thread.updatedAt]) {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      continue;
-    }
-    const timestampMs = normalizeTimestampMs(value);
-    for (const offsetDays of [-1, 0, 1]) {
-      const date = new Date(timestampMs + offsetDays * 24 * 60 * 60 * 1000);
-      addDateCandidate(candidates, localDateParts(date));
-      addDateCandidate(candidates, utcDateParts(date));
-    }
-  }
-  return [...candidates.values()];
-}
-
-function addDateCandidate(candidates: Map<string, string[]>, parts: string[]): void {
-  candidates.set(parts.join("/"), parts);
-}
-
-function localDateParts(date: Date): string[] {
-  return [
-    String(date.getFullYear()).padStart(4, "0"),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ];
-}
-
-function utcDateParts(date: Date): string[] {
-  return [
-    String(date.getUTCFullYear()).padStart(4, "0"),
-    String(date.getUTCMonth() + 1).padStart(2, "0"),
-    String(date.getUTCDate()).padStart(2, "0"),
-  ];
-}
-
 function selectLatestTurn(thread: AppServerThread): AppServerThread["turns"][number] | null {
   let latest: AppServerThread["turns"][number] | null = null;
   let latestTime = Number.NEGATIVE_INFINITY;
@@ -412,15 +328,6 @@ function getStringProperty(
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function listCodexAgentProcessIds(): Promise<number[] | null> {

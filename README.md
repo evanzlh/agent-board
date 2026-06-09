@@ -20,7 +20,8 @@ AgentBoard is a local, read-only status monitor for coding agents. It currently 
 - Codex CLI available as `codex`
 - A Codex CLI build with App Server support
 
-No build step is required for the current project layout.
+No build step is required for the current project layout. Euphony's browser
+library assets are vendored under `src/ui/vendor/euphony`.
 
 ## Quick Start
 
@@ -91,10 +92,25 @@ It includes:
 - Parent rows with collapsed sub-agent groups by default when Codex exposes a parent thread link.
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`.
 - Expandable per-agent JSON details for debugging raw status and timestamps.
+- Per-agent `View messages` links that open a session page rendered by euphony.
 
 The UI polls `/health` and `/status` every three seconds when auto-refresh is enabled.
 
 The Office view uses the same filters as the table. To keep the animated scene focused on current activity, set `Active within` to a recent window such as `30min` or `3h`.
+
+## Updating Vendored Euphony
+
+AgentBoard serves checked-in euphony library assets from `src/ui/vendor/euphony`.
+To refresh them from an euphony checkout, pass that checkout path to the update script:
+
+```bash
+scripts/update-euphony-vendor.sh /path/to/euphony
+```
+
+The script builds euphony with `corepack pnpm run build:library`, replaces the
+vendored assets, and writes source commit metadata to
+`src/ui/vendor/euphony/VENDOR.md`. The vendored directory also includes
+euphony's Apache-2.0 `LICENSE` and `NOTICE` files.
 
 ## HTTP API
 
@@ -108,6 +124,7 @@ All endpoints are local HTTP `GET` routes.
 | `GET /status` | Full status snapshot with summary and agents. |
 | `GET /agents` | Agent list. Supports `status`, `kind`, `cwd`, and `activeWithinMs` filters. |
 | `GET /agents/:id` | Single agent by thread ID. |
+| `GET /agents/:id/session` | Agent metadata and parsed Codex session JSONL events for euphony rendering. |
 | `GET /events` | Server-Sent Events stream for `agent.updated`. |
 
 Filter examples:
@@ -115,7 +132,7 @@ Filter examples:
 ```bash
 curl "http://127.0.0.1:17345/agents?status=waiting_approval"
 curl "http://127.0.0.1:17345/agents?kind=sub_agent"
-curl "http://127.0.0.1:17345/agents?cwd=/home/wh/my_project/codex_status"
+curl "http://127.0.0.1:17345/agents?cwd=/path/to/project"
 curl "http://127.0.0.1:17345/agents?status=working&activeWithinMs=1800000"
 ```
 

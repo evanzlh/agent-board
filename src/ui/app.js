@@ -515,7 +515,11 @@ function renderOfficeDetail(visibleAgents) {
     detailPair("id", selected.id),
   );
 
-  elements.officeDetail.replaceChildren(title, meta);
+  const actions = document.createElement("div");
+  actions.className = "detail-actions";
+  actions.append(renderAgentMessageLink(selected));
+
+  elements.officeDetail.replaceChildren(title, meta, actions);
 }
 
 function renderOfficeAlerts() {
@@ -728,12 +732,28 @@ function renderDetailRow(agent) {
   row.className = "detail-row";
   const detail = document.createElement("td");
   detail.colSpan = 9;
+  const actions = document.createElement("div");
+  actions.className = "detail-actions";
+  actions.append(renderAgentMessageLink(agent));
   const pre = document.createElement("pre");
   pre.className = "detail-json";
   pre.textContent = safeJson(agent);
-  detail.append(pre);
+  detail.append(actions, pre);
   row.append(detail);
   return row;
+}
+
+function renderAgentMessageLink(agent) {
+  const link = document.createElement("a");
+  link.className = "button agent-message-link";
+  link.href = agentSessionUrl(agent);
+  link.textContent = "View messages";
+  link.setAttribute("aria-label", `View messages for ${valueOrEmpty(agent.displayName)}`);
+  return link;
+}
+
+function agentSessionUrl(agent) {
+  return `/ui/agent.html?id=${encodeURIComponent(agent.id)}`;
 }
 
 function renderStatus(status, stale = false) {

@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
 import { applySessionApprovalEvidence } from "./session-evidence.ts";
+import {
+  findThreadSessionPath,
+  readThreadSessionEvents,
+  type SessionThreadReference,
+} from "./session-files.ts";
 import type { AppServerThread } from "../domain/types.ts";
 
 const NOT_LOADED_HYDRATION_LIMIT = 25;
@@ -66,6 +71,14 @@ export class AppServerClient extends EventEmitter {
       resolveLiveCodexResumeSessionIds: this.#options.resolveLiveCodexResumeSessionIds,
     });
     return { threads: threadsWithSessionEvidence, loadedThreadIds };
+  }
+
+  async readAgentSessionEvents(agent: SessionThreadReference): Promise<unknown[] | null> {
+    if (!this.#codexHome) {
+      return null;
+    }
+    const sessionPath = await findThreadSessionPath(this.#codexHome, agent);
+    return sessionPath ? await readThreadSessionEvents(sessionPath) : null;
   }
 
   async #readAllThreads(): Promise<AppServerThread[]> {

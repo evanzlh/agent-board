@@ -71,6 +71,9 @@ select {
 }
 
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
   border: 1px solid #9aa9b8;
   border-radius: 6px;
@@ -78,10 +81,17 @@ select {
   color: #ffffff;
   padding: 0 12px;
   cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .button:hover {
   background: #1c2a38;
+}
+
+.button:focus-visible {
+  outline: 2px solid #4d8fcc;
+  outline-offset: 2px;
 }
 
 .muted {
@@ -1513,6 +1523,19 @@ tbody tr.is-expanded {
   background: #f8fbff;
 }
 
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.agent-message-link {
+  min-height: 30px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .detail-json {
   max-height: 360px;
   margin: 0;
@@ -1545,7 +1568,7 @@ tbody tr.is-expanded {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 6px 10px;
-  margin: 0;
+  margin: 0 0 10px;
 }
 
 .office-detail__meta dt {
@@ -1564,6 +1587,57 @@ tbody tr.is-expanded {
   padding: 32px;
   color: #637487;
   text-align: center;
+}
+
+.session-shell {
+  background: #eef2f5;
+}
+
+.session-topbar {
+  align-items: flex-start;
+}
+
+.back-link {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: #2f6f9f;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: #1d4f73;
+  text-decoration: underline;
+}
+
+.back-link:focus-visible {
+  outline: 2px solid #4d8fcc;
+  outline-offset: 2px;
+}
+
+.session-panel {
+  min-height: calc(100vh - 116px);
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.session-messages {
+  min-height: 0;
+}
+
+.session-messages euphony-conversation {
+  display: block;
+  --euphony-padding-v: 12px;
+  --euphony-padding-h: 14px;
+  --euphony-font-color: #1f2933;
+  --euphony-font-color-secondary: #637487;
+  --euphony-conv-background-color: #ffffff;
+  --euphony-user-color: #155d86;
+  --euphony-assistant-color: #6f3a7a;
 }
 
 @media (max-width: 920px) {

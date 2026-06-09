@@ -7,6 +7,7 @@ import type { DaemonConfig } from "./config.ts";
 import type { AppServerProcess, AppServerSupervisor } from "./app-server/supervisor.ts";
 import type { InitialAppServerState } from "./app-server/client.ts";
 import type { HttpApi, HttpApiOptions } from "./http/api.ts";
+import type { AgentStatus } from "./domain/types.ts";
 
 export type DaemonHandle = {
   url: string;
@@ -16,6 +17,7 @@ export type DaemonHandle = {
 export type ClientLike = {
   initialize: () => Promise<unknown>;
   readInitialState: () => Promise<InitialAppServerState>;
+  readAgentSessionEvents?: (agent: AgentStatus) => Promise<unknown[] | null>;
   on: {
     (
       event: "notification",
@@ -182,6 +184,15 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
       host: options.config.host,
       port: options.config.port,
       store,
+      sessionReader: {
+        async readAgentSessionEvents(agent) {
+          const client = currentClient;
+          if (!client?.readAgentSessionEvents) {
+            throw new Error("app server client unavailable");
+          }
+          return await client.readAgentSessionEvents(agent);
+        },
+      },
     });
     await api.start();
 

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AgentBoard Session</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/ui/styles.css">
+  </head>
+  <body>
+    <main class="app-shell session-shell">
+      <header class="topbar session-topbar">
+        <div class="topbar__identity">
+          <a class="back-link" href="/ui">AgentBoard</a>
+          <h1 id="session-title">Agent session</h1>
+          <p id="session-meta" class="muted">Loading session...</p>
+        </div>
+      </header>
+
+      <section id="session-error" class="error-banner" aria-live="polite" hidden></section>
+
+      <section class="session-panel" aria-label="Agent session messages">
+        <div id="session-state" class="empty-state">Loading session...</div>
+        <div id="session-messages" class="session-messages"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/ui/agent.js"></script>
+  </body>
+</html>

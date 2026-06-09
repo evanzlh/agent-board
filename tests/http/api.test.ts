@@ -38,7 +38,7 @@ function thread(id: string, status: AppServerThread["status"]): AppServerThread 
 
 async function withServer(
   run: (baseUrl: string, store: StatusStore) => Promise<void>,
-  apiOptions: Partial<Pick<HttpApiOptions, "uiAssets">> = {},
+  apiOptions: Partial<Pick<HttpApiOptions, "uiAssets" | "sessionReader">> = {},
 ): Promise<void> {
   const store = new StatusStore({ staleAfterMs: 30000, now: () => 1000 });
   store.setAppServerConnection({
@@ -152,6 +152,63 @@ test("GET /agents/:id returns one agent or JSON 404", async () => {
   });
 });
 
+test("GET /agents/:id/session returns agent metadata and Codex session events", async () => {
+  const sessionEvents = [
+    { type: "session_meta", payload: { id: "session-work-1" } },
+    { type: "response_item", payload: { type: "message", role: "user", content: [] } },
+  ];
+
+  await withServer(
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/agents/work-1/session`);
+
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.agent.id, "work-1");
+      assert.deepEqual(body.events, sessionEvents);
+    },
+    {
+      sessionReader: {
+        async readAgentSessionEvents(agent) {
+          assert.equal(agent.id, "work-1");
+          return sessionEvents;
+        },
+      },
+    },
+  );
+});
+
+test("GET /agents/:id/session returns stable JSON errors", async () => {
+  await withServer(async (baseUrl) => {
+    const missingAgent = await fetch(`${baseUrl}/agents/missing/session`);
+    assert.equal(missingAgent.status, 404);
+    assert.deepEqual(await missingAgent.json(), { error: "agent_not_found", id: "missing" });
+
+    const unavailable = await fetch(`${baseUrl}/agents/work-1/session`);
+    assert.equal(unavailable.status, 503);
+    assert.deepEqual(await unavailable.json(), {
+      error: "session_reader_unavailable",
+      id: "work-1",
+    });
+  });
+
+  await withServer(
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/agents/work-1/session`);
+
+      assert.equal(response.status, 404);
+      assert.deepEqual(await response.json(), { error: "session_not_found", id: "work-1" });
+    },
+    {
+      sessionReader: {
+        async readAgentSessionEvents() {
+          return null;
+        },
+      },
+    },
+  );
+});
+
 test("GET /agents/:id returns JSON 400 for malformed encoded IDs", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/agents/%E0%A4%A`, {
@@ -160,6 +217,16 @@ test("GET /agents/:id returns JSON 400 for malformed encoded IDs", async () => {
 
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), {
+      error: "bad_request",
+      message: "malformed_agent_id",
+    });
+
+    const sessionResponse = await fetch(`${baseUrl}/agents/%E0%A4%A/session`, {
+      signal: AbortSignal.timeout(1000),
+    });
+
+    assert.equal(sessionResponse.status, 400);
+    assert.deepEqual(await sessionResponse.json(), {
       error: "bad_request",
       message: "malformed_agent_id",
     });
@@ -261,6 +328,7 @@ test("GET /ui static assets use explicit content types", async () => {
   await withServer(async (baseUrl) => {
     const scripts = [
       { path: "/ui/app.js", contentType: "text/javascript; charset=utf-8" },
+      { path: "/ui/agent.js", contentType: "text/javascript; charset=utf-8" },
       { path: "/ui/view-model.js", contentType: "text/javascript; charset=utf-8" },
       { path: "/ui/styles.css", contentType: "text/css; charset=utf-8" },
     ];
@@ -272,6 +340,48 @@ test("GET /ui static assets use explicit content types", async () => {
       assert.equal(response.headers.get("cache-control"), "no-cache");
       assert.ok((await response.text()).length > 0);
     }
+  });
+});
+
+test("GET /ui/agent.html serves the agent session page", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/ui/agent.html`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+    const html = await response.text();
+
+    assert.match(html, /<title>AgentBoard Session<\/title>/);
+    assert.match(html, /id="session-title"/);
+    assert.match(html, /id="session-messages"/);
+    assert.match(html, /<script type="module" src="\/ui\/agent\.js"><\/script>/);
+  });
+});
+
+test("GET /ui vendor euphony assets are served from an explicit safe prefix", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/ui/vendor/euphony/euphony.js`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/javascript; charset=utf-8");
+    assert.ok((await response.text()).length > 0);
+
+    const traversal = await fetch(`${baseUrl}/ui/vendor/euphony/../euphony.js`);
+    assert.equal(traversal.status, 404);
+  });
+});
+
+test("GET /ui assets wire dashboard message links and euphony session rendering", async () => {
+  await withServer(async (baseUrl) => {
+    const dashboard = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const session = await (await fetch(`${baseUrl}/ui/agent.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(dashboard, /View messages/);
+    assert.match(dashboard, /\/ui\/agent\.html\?id=/);
+    assert.match(session, /parseCodexSession/);
+    assert.match(session, /\/agents\/\$\{encodeURIComponent\(agentId\)\}\/session/);
+    assert.match(session, /euphony-conversation/);
+    assert.match(styles, /\.session-panel/);
+    assert.match(styles, /\.agent-message-link/);
   });
 });
 
