@@ -1859,6 +1859,12 @@ tbody tr.is-expanded {
     padding-left: 0;
   }
 
+  table {
+    min-width: 1120px;
+  }
+}
+
+@media (max-width: 640px) {
   .office-detail {
     padding: 16px;
   }
@@ -1866,9 +1872,5 @@ tbody tr.is-expanded {
   .office-detail__dialog {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 32px);
-  }
-
-  table {
-    min-width: 1120px;
   }
 }
