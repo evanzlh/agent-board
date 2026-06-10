@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="docs/assets/agentboard-icon.png" alt="agentBoard icon" width="128" height="128">
+  <img src="docs/assets/agentboard-icon.png" alt="AgentBoard icon" width="128" height="128">
 </p>
 
-<h1 align="center">agentBoard</h1>
+<h1 align="center">AgentBoard</h1>
 
 <p align="center">
-  Turn local Codex agent activity into a real-time, read-only status cockpit for browsers, scripts, and dashboards.
+  See what every Codex agent is doing, when it finishes, and when it needs your approval.
 </p>
 
 <p align="center">
@@ -19,18 +19,20 @@
   English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-`agentBoard` is a local status monitor for Codex agents. It observes Codex App Server state, normalizes Codex threads into agent records, exposes a small JSON/SSE API for dashboards and scripts, and serves a built-in web UI at `/ui`.
+`AgentBoard` is a local status board for Codex agents. It observes Codex App Server state, normalizes Codex threads into agent records, highlights state transitions such as finished work or approval waits, renders session message lists with [euphony](https://github.com/openai/euphony), and exposes a small JSON/SSE API for dashboards and scripts.
 
 > [!IMPORTANT]
-> agentBoard currently supports Codex only and observes local Codex state. It does not approve requests, send user input, stop agents, or mutate Codex sessions.
+> AgentBoard currently supports Codex agents only and observes local Codex state. It does not approve requests, send user input, stop agents, mutate Codex sessions, or install hooks into your shell or Codex workflow.
 
-## Why agentBoard
+## Why AgentBoard
 
 When several Codex sessions, sub-agents, or long-running debugging tasks are active at the same time, terminal windows stop being a useful status surface. It becomes hard to tell what is still working, what is waiting for approval, which session is finished, and whether the App Server connection is healthy.
 
-`agentBoard` adds a local, read-only observation layer for that workflow:
+`AgentBoard` adds a local, read-only observation layer for that workflow:
 
 - See all local Codex threads and sub-agents in one place.
+- Catch state changes when an agent finishes, errors, or moves into approval/input waiting.
+- Open rendered message lists for an agent without parsing Codex session JSONL by hand.
 - Open a browser dashboard without depending on an external service.
 - Feed local scripts, notifications, or custom dashboards with HTTP JSON/SSE.
 - Keep raw status evidence visible when debugging Codex App Server behavior.
@@ -40,11 +42,20 @@ When several Codex sessions, sub-agents, or long-running debugging tasks are act
 | Capability | What it gives you |
 | --- | --- |
 | Live agent inventory | Main agents, sub-agents, parent thread links, and working directories |
+| Codex agent work status | See which Codex agents are working, idle, finished, waiting for approval, waiting for input, or errored |
+| Status transition hints | Surface meaningful transitions, including finished agents and approval/input blockers |
 | Normalized statuses | `idle`, `working`, `finished`, `waiting_approval`, `waiting_input`, `error`, `unknown` |
 | App Server health | Connection state, mode, Codex CLI version, latest error, and refresh timing |
 | Built-in Web UI | Table view plus pixel-style Office view, with filters for status, kind, activity, cwd, and search |
-| Session viewing | Per-agent `View messages` links rendered with vendored euphony assets |
+| Message list rendering | Per-agent `View messages` links render Codex session messages with vendored [euphony](https://github.com/openai/euphony) assets |
 | Local API | `/status`, `/agents`, `/health`, `/events`, and session endpoints for integrations |
+
+## Design Principles
+
+- **Non-invasive by default**: AgentBoard does not install shell hooks, patch Codex, wrap prompts, or inject itself into agent execution.
+- **Read-only observer**: It connects through Codex App Server APIs and local session evidence, then presents status without mutating sessions.
+- **Status-first UI**: The dashboard is built around agent work state and transitions, not raw logs first.
+- **Inspectable message rendering**: Session pages reuse [euphony](https://github.com/openai/euphony) so Codex messages render as structured conversation views instead of plain JSONL.
 
 ## Quick Start
 
@@ -82,7 +93,7 @@ curl "http://127.0.0.1:17345/agents?status=working"
 ```
 
 > [!NOTE]
-> The public product name used in the docs is `agentBoard`. The package and CLI bin remain `codex-status`, so startup output and `package.json` still use that name.
+> The public product name used in the docs is `AgentBoard`. The package and CLI bin remain `codex-status`, so startup output and `package.json` still use that name.
 
 ## CLI Usage
 
@@ -107,8 +118,10 @@ node src/cli.ts daemon --host 0.0.0.0 --port 18000 --refresh-interval-ms 2000
 ## Use Cases
 
 - **Monitor parallel Codex work**: identify which local agents are still active.
-- **Find approval or input blockers**: filter for `waiting_approval` or `waiting_input`.
+- **Catch status transitions**: notice when agents finish, fail, or start waiting for approval/input.
+- **Find approval or input blockers**: filter for `waiting_approval` or `waiting_input` and jump to the relevant agent.
 - **Inspect sub-agent relationships**: see main agents and sub-agents grouped by parent thread when Codex exposes the link.
+- **Review rendered message lists**: open a session page rendered by [euphony](https://github.com/openai/euphony) instead of reading raw JSONL.
 - **Power local scripts**: connect notifications, status bars, or dashboards through `/status`, `/agents`, or `/events`.
 - **Debug App Server state**: inspect connection mode, latest errors, stale agents, and raw status evidence.
 
@@ -127,9 +140,10 @@ It includes:
 - Filterable table by status, kind, active time window, cwd, or free-text search
 - `Table` / `Office` switch, where Office renders filtered agents as pixel-style team pods
 - Parent rows with collapsed sub-agent groups by default when Codex exposes a parent thread link
+- Status transition alerts for important main-agent changes, such as working to finished or waiting for approval
 - Stale badges when App Server connectivity is lost long enough to exceed `--stale-after-ms`
 - Expandable per-agent JSON details for raw status, timestamps, and debugging fields
-- Per-agent `View messages` links that open a session page rendered by euphony
+- Per-agent `View messages` links that open a session page rendered by [euphony](https://github.com/openai/euphony)
 
 The UI polls `/health` and `/status` every three seconds when auto-refresh is enabled. The Office view uses the same filters as the table; set `Active within` to a recent window such as `30min` or `3h` to keep the scene focused on current activity.
 
@@ -206,7 +220,7 @@ Each agent record is derived from one Codex App Server thread.
 | `agentNickname` / `agentRole` | Sub-agent identity hints |
 | `lastTurn` | Last known turn status and timestamps |
 | `waitingSince` | First observed time for approval/input waiting states |
-| `lastEventAt` | Last local update time observed by agentBoard |
+| `lastEventAt` | Last local update time observed by AgentBoard |
 | `stale` | `true` when App Server is disconnected and the agent has exceeded the stale threshold |
 
 Current status mapping:
@@ -224,9 +238,9 @@ Current status mapping:
 
 ## App Server Lifecycle
 
-On startup, agentBoard runs `codex --version`, then connects to Codex App Server using one of two modes:
+On startup, AgentBoard runs `codex --version`, then connects to Codex App Server using one of two modes:
 
-| Mode | When it is used | Process owned by agentBoard |
+| Mode | When it is used | Process owned by AgentBoard |
 | --- | --- | --- |
 | `external-daemon` | `codex app-server daemon start` succeeds, or `--no-start-app-server` is used | A local `codex app-server proxy` process. The external daemon remains owned by Codex CLI |
 | `managed-child` | The managed standalone daemon is unavailable and auto-start is enabled | A child `codex app-server --listen stdio://` process |
@@ -265,7 +279,7 @@ scripts/           Real App Server smoke test
 
 ## Updating Vendored Euphony
 
-agentBoard serves checked-in euphony browser assets from `src/ui/vendor/euphony`. To refresh them from an euphony checkout, pass that checkout path to the update script:
+AgentBoard serves checked-in euphony browser assets from `src/ui/vendor/euphony`. To refresh them from an euphony checkout, pass that checkout path to the update script:
 
 ```bash
 scripts/update-euphony-vendor.sh /path/to/euphony

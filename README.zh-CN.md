@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="docs/assets/agentboard-icon.png" alt="agentBoard icon" width="128" height="128">
+  <img src="docs/assets/agentboard-icon.png" alt="AgentBoard icon" width="128" height="128">
 </p>
 
-<h1 align="center">agentBoard</h1>
+<h1 align="center">AgentBoard</h1>
 
 <p align="center">
-  把本地 Codex 代理状态变成一个实时、只读、可接入脚本的状态驾驶舱。
+  看清每个 Codex agent 正在做什么、什么时候完成、什么时候需要你批准。
 </p>
 
 <p align="center">
@@ -19,18 +19,20 @@
   <a href="README.md">English</a> | 简体中文
 </p>
 
-`agentBoard` 是一个本地 Codex 代理监控面板。它会观察 Codex App Server 状态，把线程、子代理、等待审批、等待输入、错误和完成状态统一成可读的 Agent 记录，并提供内置 Web UI、JSON API 和 SSE 事件流。
+`AgentBoard` 是一个本地 Codex agent 状态看板。它会观察 Codex App Server 状态，把线程、子代理、等待审批、等待输入、错误和完成状态统一成可读的 Agent 记录，突出“已完成”“需要批准”等状态转换提示，借助 [euphony](https://github.com/openai/euphony) 渲染会话消息列表，并提供内置 Web UI、JSON API 和 SSE 事件流。
 
 > [!IMPORTANT]
-> agentBoard 目前只支持 Codex，并且只观察本地 Codex 状态。它不会审批请求、发送用户输入、停止代理，也不会修改 Codex 会话。
+> AgentBoard 目前只支持 Codex agent，并且只观察本地 Codex 状态。它不会审批请求、发送用户输入、停止代理、修改 Codex 会话，也不会给 shell 或 Codex 工作流安装 hook。
 
-## 为什么需要 agentBoard
+## 为什么需要 AgentBoard
 
 当你同时跑多个 Codex 任务、子代理或长时间调试流程时，终端窗口很快会变成黑盒：谁还在工作、谁卡在审批、哪个会话已经完成、哪个 App Server 连接失效，都不够直观。
 
-`agentBoard` 给这类本地工作流补了一个只读观察层：
+`AgentBoard` 给这类本地工作流补了一个只读观察层：
 
 - 一眼看到所有 Codex 线程和子代理的当前状态
+- 在 agent 完成、报错、进入审批等待或输入等待时看到状态转换提示
+- 直接打开渲染后的消息列表，不需要手动读 Codex session JSONL
 - 用浏览器打开本地看板，不需要外部服务
 - 用 HTTP JSON/SSE 把状态接进脚本、通知或自定义 dashboard
 - 保留原始状态证据，方便排查 Codex App Server 行为
@@ -40,11 +42,20 @@
 | 能力 | 说明 |
 | --- | --- |
 | 实时代理清单 | 展示 main agent、sub-agent、父子线程关系和工作目录 |
+| Codex agent 工作状态 | 显示哪些 agent 正在工作、空闲、已完成、等待批准、等待输入或报错 |
+| 状态转换提示 | 突出已完成、需要批准、需要输入、出错等关键变化 |
 | 状态归一化 | 输出 `idle`、`working`、`finished`、`waiting_approval`、`waiting_input`、`error`、`unknown` |
 | App Server 健康信息 | 显示连接状态、运行模式、Codex CLI 版本、最近错误和刷新时间 |
 | 内置 Web UI | 表格视图 + 像素风 Office 视图，支持状态、类型、活跃时间、cwd 和搜索过滤 |
-| 会话查看 | 每个 Agent 都可以打开 `View messages`，用 vendored euphony 渲染 Codex session |
+| 消息列表渲染 | 每个 Agent 都可以打开 `View messages`，用 vendored [euphony](https://github.com/openai/euphony) 渲染 Codex session |
 | 本地 API | 提供 `/status`、`/agents`、`/health`、`/events` 等 JSON/SSE 端点 |
+
+## 设计亮点
+
+- **非侵入式设计**：AgentBoard 不安装 shell hook，不 patch Codex，不包裹 prompt，也不介入 agent 执行链路。
+- **只读观察者**：它通过 Codex App Server API 和本地 session evidence 观察状态，只展示信息，不修改会话。
+- **状态优先**：看板围绕 agent 工作状态和状态转换设计，而不是先把原始日志堆给用户。
+- **可读消息渲染**：会话页复用 [euphony](https://github.com/openai/euphony)，把 Codex 消息渲染成结构化对话视图，而不是裸 JSONL。
 
 ## 快速开始
 
@@ -82,7 +93,7 @@ curl "http://127.0.0.1:17345/agents?status=working"
 ```
 
 > [!NOTE]
-> README 中统一使用产品名 `agentBoard`。项目包名和 CLI bin 仍是 `codex-status`，所以启动输出和 `package.json` 会继续保留这个名称。
+> README 中统一使用产品名 `AgentBoard`。项目包名和 CLI bin 仍是 `codex-status`，所以启动输出和 `package.json` 会继续保留这个名称。
 
 ## 常用命令
 
@@ -107,8 +118,10 @@ node src/cli.ts daemon --host 0.0.0.0 --port 18000 --refresh-interval-ms 2000
 ## 使用场景
 
 - **多任务并行监控**：同时跑多个 Codex 任务时，快速识别仍在工作的 Agent。
-- **审批/输入提醒**：过滤 `waiting_approval` 或 `waiting_input`，定位卡住的会话。
+- **状态转换提示**：看到 agent 已完成、失败、开始等待批准或等待输入。
+- **审批/输入提醒**：过滤 `waiting_approval` 或 `waiting_input`，快速跳到卡住的会话。
 - **子代理关系排查**：查看 main agent 和 sub-agent 的父子线程关系。
+- **消息列表回看**：打开由 [euphony](https://github.com/openai/euphony) 渲染的会话页，而不是直接阅读 JSONL。
 - **本地脚本集成**：通过 `/status`、`/agents` 或 `/events` 接入通知、状态栏、CI 辅助脚本。
 - **App Server 调试**：观察连接模式、最近错误、stale 状态和原始状态证据。
 
@@ -127,9 +140,10 @@ http://127.0.0.1:17345/ui
 - 可过滤表格：按 status、kind、active time window、cwd、关键字搜索
 - `Table` / `Office` 切换：Office 会把过滤后的 Agent 渲染成像素风团队工位
 - 父子关系折叠：Codex 暴露父线程时，子代理默认折叠在父 Agent 下
+- 重要状态转换提醒：例如 main agent 从 working 变为 finished，或进入 approval/input waiting
 - stale 标记：App Server 断连并超过 `--stale-after-ms` 后显示 stale
 - JSON 详情：展开单个 Agent 查看原始状态、时间戳和调试字段
-- 会话消息：`View messages` 打开 agent session 页面，由 euphony 渲染
+- 会话消息：`View messages` 打开 agent session 页面，由 [euphony](https://github.com/openai/euphony) 渲染
 
 UI 在启用自动刷新时每 3 秒轮询 `/health` 和 `/status`。Office 视图会复用表格过滤条件；建议把 `Active within` 设置为 `30min` 或 `3h`，让画面聚焦当前活跃任务。
 
@@ -206,7 +220,7 @@ data: {"type":"agent.updated","agentId":"thread-id","status":"working","at":1780
 | `agentNickname` / `agentRole` | 子代理身份提示 |
 | `lastTurn` | 最近 turn 的状态和时间戳 |
 | `waitingSince` | 首次观察到审批/输入等待状态的时间 |
-| `lastEventAt` | agentBoard 本地观察到的最近更新时间 |
+| `lastEventAt` | AgentBoard 本地观察到的最近更新时间 |
 | `stale` | App Server 断连且超过 stale 阈值时为 `true` |
 
 当前状态映射：
@@ -224,9 +238,9 @@ data: {"type":"agent.updated","agentId":"thread-id","status":"working","at":1780
 
 ## App Server 生命周期
 
-启动时，agentBoard 会先运行 `codex --version`，然后用两种模式之一连接 Codex App Server：
+启动时，AgentBoard 会先运行 `codex --version`，然后用两种模式之一连接 Codex App Server：
 
-| 模式 | 触发条件 | agentBoard 拥有的进程 |
+| 模式 | 触发条件 | AgentBoard 拥有的进程 |
 | --- | --- | --- |
 | `external-daemon` | `codex app-server daemon start` 成功，或使用 `--no-start-app-server` | 本地 `codex app-server proxy` 进程；外部 daemon 仍由 Codex CLI 管理 |
 | `managed-child` | managed standalone daemon 不可用且允许自动启动 | 子进程 `codex app-server --listen stdio://` |
@@ -265,7 +279,7 @@ scripts/           Real App Server smoke test
 
 ## 更新 Vendored Euphony
 
-agentBoard 会从 `src/ui/vendor/euphony` 提供已 check-in 的 euphony 浏览器资源。要从 euphony checkout 刷新它们：
+AgentBoard 会从 `src/ui/vendor/euphony` 提供已 check-in 的 euphony 浏览器资源。要从 euphony checkout 刷新它们：
 
 ```bash
 scripts/update-euphony-vendor.sh /path/to/euphony
