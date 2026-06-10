@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="Node.js >=22.18.0" src="https://img.shields.io/badge/node-%3E%3D22.18.0-339933?logo=node.js&logoColor=white">
+  <img alt="Node.js >=22.18.0" src="https://img.shields.io/badge/node-%3E%3D22.18.0-339933">
   <img alt="Codex App Server" src="https://img.shields.io/badge/Codex-App%20Server-111827">
   <img alt="Local only" src="https://img.shields.io/badge/local--only-read--only-06b6d4">
   <img alt="Tests" src="https://img.shields.io/badge/tests-node%20--test-22c55e">
