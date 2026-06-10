@@ -1616,6 +1616,106 @@ tbody tr.is-expanded {
   outline-offset: 2px;
 }
 
+.session-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.session-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.session-summary-card {
+  min-width: 0;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.session-summary-card span {
+  display: block;
+  color: #637487;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-summary-card strong {
+  display: block;
+  min-width: 0;
+  margin-top: 4px;
+  color: #1f2933;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.session-diagnostics {
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.session-diagnostics summary {
+  min-height: 36px;
+  padding: 9px 12px;
+  color: #405261;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-diagnostics summary:focus-visible {
+  outline: 2px solid #4d8fcc;
+  outline-offset: 2px;
+}
+
+.session-diagnostics__content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border-top: 1px solid #dbe2ea;
+  padding: 12px;
+}
+
+.session-diagnostics__section {
+  min-width: 0;
+}
+
+.session-diagnostics__section h2 {
+  margin: 0 0 8px;
+  color: #26384a;
+  font-size: 13px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.session-diagnostics__section dl {
+  display: grid;
+  grid-template-columns: minmax(112px, max-content) minmax(0, 1fr);
+  gap: 5px 10px;
+  margin: 0;
+}
+
+.session-diagnostics__section dt {
+  color: #637487;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.session-diagnostics__section dd {
+  min-width: 0;
+  margin: 0;
+  color: #26384a;
+  overflow-wrap: anywhere;
+}
+
 .session-panel {
   min-height: calc(100vh - 116px);
   margin-top: 12px;
@@ -1657,6 +1757,14 @@ tbody tr.is-expanded {
 
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-summary__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .session-diagnostics__content {
+    grid-template-columns: 1fr;
   }
 
   .filters {

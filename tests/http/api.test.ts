@@ -399,6 +399,9 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(sessionSummary, /normalizeToolRows/);
     assert.doesNotMatch(sessionSummary, /value !== null && value !== undefined/);
     assert.match(styles, /\.session-panel/);
+    assert.match(styles, /\.session-summary/);
+    assert.match(styles, /\.session-summary-card/);
+    assert.match(styles, /\.session-diagnostics/);
     assert.match(styles, /\.agent-message-link/);
   });
 });
