@@ -266,11 +266,15 @@ test("summarizeSessionEvents does not expose arbitrary unknown type strings as c
   const summary = summarizeSessionEvents([
     { type: "not_a_public_event_key", payload: {} },
     { type: "response_item", payload: { type: "not_a_public_response_key" } },
+    { type: "event_msg", payload: { type: "user_message" } },
+    { type: "event_msg", payload: { type: "agent_message" } },
     { type: "event_msg", payload: { type: "not_a_public_event_message_key" } },
   ]);
 
   assert.equal(summary.events.byType.unknown, 1);
   assert.equal(summary.events.responseItems.unknown, 1);
+  assert.equal(summary.events.eventMessages.user_message, 1);
+  assert.equal(summary.events.eventMessages.agent_message, 1);
   assert.equal(summary.events.eventMessages.unknown, 1);
   assert.equal("not_a_public_event_key" in summary.events.byType, false);
   assert.equal("not_a_public_response_key" in summary.events.responseItems, false);

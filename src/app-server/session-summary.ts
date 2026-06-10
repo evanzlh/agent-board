@@ -75,9 +75,11 @@ const RESPONSE_ITEM_TYPES = new Set([
 ]);
 const EVENT_MESSAGE_TYPES = new Set([
   "agent_reasoning",
+  "agent_message",
   "context_compacted",
   "token_count",
   "turn_aborted",
+  "user_message",
 ]);
 const TOOL_CALL_TYPES = new Set([
   "function_call",
