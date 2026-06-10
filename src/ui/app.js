@@ -19,7 +19,7 @@ const state = {
   filters: {
     status: "all",
     kind: "all",
-    activeWithinMs: "all",
+    activeWithinMs: "10800000",
     cwd: "",
     search: "",
   },

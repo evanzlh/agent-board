@@ -313,7 +313,7 @@ test("GET /ui serves the Web frontend HTML", async () => {
     assert.match(html, /id="table-view"/);
     assert.match(html, /id="office-view"/);
     assert.match(html, /<option value="1800000">30min<\/option>/);
-    assert.match(html, /<option value="10800000">3h<\/option>/);
+    assert.match(html, /<option value="10800000" selected>3h<\/option>/);
     assert.match(html, /<option value="43200000">12h<\/option>/);
     assert.match(html, /<option value="86400000">24h<\/option>/);
     assert.match(html, /<option value="604800000">7days<\/option>/);
@@ -409,6 +409,16 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(styles, /\.session-diagnostics__section dt \{[\s\S]*?overflow-wrap: anywhere;/);
     assert.match(styles, /\.session-diagnostics__section dd \{[\s\S]*?overflow-wrap: anywhere;/);
     assert.match(styles, /\.agent-message-link/);
+  });
+});
+
+test("GET /ui defaults Active within to 3h", async () => {
+  await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/ui`)).text();
+    const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+
+    assert.match(html, /<option value="10800000" selected>3h<\/option>/);
+    assert.match(script, /activeWithinMs:\s*"10800000"/);
   });
 });
 
