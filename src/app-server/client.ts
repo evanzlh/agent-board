@@ -19,7 +19,9 @@ export type AppServerNotification = {
 };
 
 export type AppServerClientOptions = {
+  abandonedActiveSessionMs?: number;
   detectOrphanedSessions?: boolean;
+  now?: () => number;
   resolveLiveCodexResumeSessionIds?: () => Promise<Set<string> | null>;
 };
 
@@ -66,8 +68,10 @@ export class AppServerClient extends EventEmitter {
     const hydratedThreads = await this.#readThreads(threadIdsToHydrate);
     const mergedThreads = mergeHydratedThreads(threads, hydratedThreads);
     const threadsWithSessionEvidence = await applySessionApprovalEvidence(mergedThreads, {
+      abandonedActiveSessionMs: this.#options.abandonedActiveSessionMs,
       codexHome: this.#codexHome,
       detectOrphanedSessions: this.#options.detectOrphanedSessions ?? false,
+      now: this.#options.now,
       resolveLiveCodexResumeSessionIds: this.#options.resolveLiveCodexResumeSessionIds,
     });
     return { threads: threadsWithSessionEvidence, loadedThreadIds };

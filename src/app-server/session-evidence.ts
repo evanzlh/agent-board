@@ -8,11 +8,19 @@ import type { AppServerThread } from "../domain/types.ts";
 import { findThreadSessionPath } from "./session-files.ts";
 
 const execFile = promisify(execFileCallback);
+const DEFAULT_ABANDONED_ACTIVE_SESSION_MS = 6 * 60 * 60 * 1000;
 
 export type SessionEvidenceOptions = {
+  abandonedActiveSessionMs?: number;
   codexHome: string | null;
   detectOrphanedSessions?: boolean;
+  now?: () => number;
   resolveLiveCodexResumeSessionIds?: () => Promise<Set<string> | null>;
+};
+
+type SessionLifecycleEvidence = {
+  hasCompletionEvidence: boolean;
+  lastEventAtMs: number | null;
 };
 
 export async function applySessionApprovalEvidence(
@@ -24,6 +32,11 @@ export async function applySessionApprovalEvidence(
   }
 
   const shouldDetectOrphaned = options.detectOrphanedSessions === true;
+  const abandonedActiveSessionMs = readPositiveDurationMs(
+    options.abandonedActiveSessionMs,
+    DEFAULT_ABANDONED_ACTIVE_SESSION_MS,
+  );
+  const nowMs = options.now?.() ?? Date.now();
   const liveSessions =
     shouldDetectOrphaned && options.resolveLiveCodexResumeSessionIds
       ? await options.resolveLiveCodexResumeSessionIds()
@@ -41,7 +54,13 @@ export async function applySessionApprovalEvidence(
       !disableOrphanCheck &&
       !hasWaitingApprovalFlag(thread.status) &&
       isWorkingThread(thread) &&
-      (await isThreadOrphaned(thread, options.codexHome, liveSessions))
+      ((await isThreadOrphaned(thread, options.codexHome, liveSessions)) ||
+        (await isAbandonedActiveSession(
+          thread,
+          options.codexHome,
+          nowMs,
+          abandonedActiveSessionMs,
+        )))
     ) {
       const status = withOrphanedActiveStatus(thread.status);
       if (status !== thread.status) {
@@ -157,6 +176,33 @@ async function isThreadOrphaned(
   return !liveSessions.has(wtSession);
 }
 
+async function isAbandonedActiveSession(
+  thread: AppServerThread,
+  codexHome: string,
+  nowMs: number,
+  abandonedActiveSessionMs: number,
+): Promise<boolean> {
+  if (!Number.isFinite(nowMs)) {
+    return false;
+  }
+
+  const sessionPath = await findThreadSessionPath(codexHome, thread);
+  if (!sessionPath) {
+    return false;
+  }
+
+  const evidence = await readSessionLifecycleEvidence(sessionPath);
+  if (evidence.hasCompletionEvidence) {
+    return false;
+  }
+
+  const activityAt = Math.max(
+    evidence.lastEventAtMs ?? Number.NEGATIVE_INFINITY,
+    latestThreadActivityAtMs(thread) ?? Number.NEGATIVE_INFINITY,
+  );
+  return Number.isFinite(activityAt) && nowMs - activityAt >= abandonedActiveSessionMs;
+}
+
 function withOrphanedActiveStatus(status: unknown): AppServerThread["status"] {
   if (!isActiveThreadStatus(status)) {
     return {
@@ -211,6 +257,50 @@ async function hasUnresolvedEscalationCall(sessionPath: string): Promise<boolean
   return pendingEscalationCalls.size > 0;
 }
 
+async function readSessionLifecycleEvidence(
+  sessionPath: string,
+): Promise<SessionLifecycleEvidence> {
+  let content;
+  try {
+    content = await readFile(sessionPath, "utf8");
+  } catch {
+    return { hasCompletionEvidence: false, lastEventAtMs: null };
+  }
+
+  let hasCompletionEvidence = false;
+  let lastEventAtMs: number | null = null;
+  for (const line of content.split(/\r?\n/)) {
+    if (!line.trim()) {
+      continue;
+    }
+
+    const entry = parseJsonObject(line);
+    if (!entry) {
+      continue;
+    }
+
+    const timestamp = getStringProperty(entry, "timestamp");
+    if (timestamp) {
+      const timestampMs = Date.parse(timestamp);
+      if (Number.isFinite(timestampMs)) {
+        lastEventAtMs =
+          lastEventAtMs === null ? timestampMs : Math.max(lastEventAtMs, timestampMs);
+      }
+    }
+    hasCompletionEvidence ||= hasSessionCompletionEvidence(entry);
+  }
+
+  return { hasCompletionEvidence, lastEventAtMs };
+}
+
+function hasSessionCompletionEvidence(entry: Record<string, unknown>): boolean {
+  const payload = getObjectProperty(entry, "payload");
+  return (
+    getStringProperty(payload, "type") === "task_complete" ||
+    getStringProperty(payload, "phase") === "final_answer"
+  );
+}
+
 function isEscalatedFunctionCall(payload: Record<string, unknown>): boolean {
   const argumentsText = getStringProperty(payload, "arguments");
   if (!argumentsText) {
@@ -235,6 +325,39 @@ function isApprovalEvidenceCandidate(thread: AppServerThread): boolean {
 
 function isWorkingThread(thread: AppServerThread): boolean {
   return isActiveThreadStatus(thread.status) || hasActiveTurnEvidence(thread);
+}
+
+function latestThreadActivityAtMs(thread: AppServerThread): number | null {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const value of [thread.createdAt, thread.updatedAt]) {
+    const timestampMs = normalizeOptionalTimestampMs(value);
+    if (timestampMs !== null) {
+      latest = Math.max(latest, timestampMs);
+    }
+  }
+
+  for (const turn of thread.turns ?? []) {
+    for (const value of [turn.startedAt, turn.completedAt]) {
+      const timestampMs = normalizeOptionalTimestampMs(value);
+      if (timestampMs !== null) {
+        latest = Math.max(latest, timestampMs);
+      }
+    }
+  }
+
+  return Number.isFinite(latest) ? latest : null;
+}
+
+function normalizeOptionalTimestampMs(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value)
+    ? normalizeTimestampMs(value)
+    : null;
+}
+
+function readPositiveDurationMs(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : fallback;
 }
 
 function withWaitingApprovalStatus(thread: AppServerThread): AppServerThread {

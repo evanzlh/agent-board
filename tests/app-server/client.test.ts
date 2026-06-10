@@ -356,6 +356,66 @@ test("client parses declared WT_SESSION lines when detecting orphaned sessions",
   });
 });
 
+test("client marks abandoned active sessions without shell snapshots as orphaned", async () => {
+  const codexHome = await writeSession(
+    "abandoned-active",
+    "2026/06/03",
+    [
+      {
+        timestamp: "2026-06-03T10:00:00.000Z",
+        type: "event_msg",
+        payload: { type: "task_started", started_at: 1780480800 },
+      },
+      {
+        timestamp: "2026-06-03T10:00:02.000Z",
+        type: "event_msg",
+        payload: { type: "user_message", message: "version" },
+      },
+    ],
+  );
+
+  const rpc = new FakeRpc();
+  rpc.respond("initialize", { userAgent: "codex", codexHome });
+  rpc.respond("thread/list", {
+    data: [
+      {
+        id: "abandoned-active",
+        sessionId: "abandoned-active",
+        status: { type: "active", activeFlags: [] },
+        createdAt: Date.parse("2026-06-03T10:00:00.000Z"),
+        updatedAt: Date.parse("2026-06-03T10:00:02.000Z"),
+        turns: [{ status: "inProgress", startedAt: 1780480800, completedAt: null }],
+      },
+    ],
+    nextCursor: null,
+  });
+  rpc.respond("thread/loaded/list", { data: [], nextCursor: null });
+  rpc.respond("thread/read", {
+    thread: {
+      id: "abandoned-active",
+      sessionId: "abandoned-active",
+      status: { type: "active", activeFlags: [] },
+      createdAt: Date.parse("2026-06-03T10:00:00.000Z"),
+      updatedAt: Date.parse("2026-06-03T10:00:02.000Z"),
+      turns: [{ status: "inProgress", startedAt: 1780480800, completedAt: null }],
+    },
+  });
+
+  const client = new AppServerClient(rpc, {
+    abandonedActiveSessionMs: 60 * 60 * 1000,
+    detectOrphanedSessions: true,
+    now: () => Date.parse("2026-06-03T12:00:00.000Z"),
+    resolveLiveCodexResumeSessionIds: async () => new Set(["live-session"]),
+  });
+  await client.initialize();
+  const state = await client.readInitialState();
+
+  assert.deepEqual(state.threads[0]?.status, {
+    type: "active",
+    activeFlags: ["orphanedSession"],
+  });
+});
+
 test("client ignores resolved session escalation evidence", async () => {
   const codexHome = await writeSession(
     "resolved-approval",
