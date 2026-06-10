@@ -28,6 +28,7 @@ const state = {
   agentStatuses: new Map(),
   officeAlerts: [],
   nextOfficeAlertId: 1,
+  officeDetailAgentId: null,
   officeDetailFocusPending: false,
   activeView: "table",
   autoRefreshEnabled: true,
@@ -304,6 +305,8 @@ function renderOffice() {
     empty.className = "empty-state";
     empty.textContent = state.agents.length === 0 ? "No agents loaded." : "No agents match the filters.";
     elements.officeBody.replaceChildren(empty);
+    state.officeDetailAgentId = null;
+    state.officeDetailFocusPending = false;
     elements.officeDetail.hidden = true;
     elements.officeDetail.setAttribute("aria-hidden", "true");
     elements.officeDetail.replaceChildren();
@@ -391,18 +394,23 @@ function renderOfficeAgent(agent, role) {
   if (agent.stale) {
     button.classList.add("is-stale");
   }
-  if (state.expandedAgentId === agent.id) {
+  if (state.officeDetailAgentId === agent.id) {
     button.classList.add("is-selected");
   }
+  button.dataset.agentId = agent.id;
   button.title = `${valueOrEmpty(agent.displayName)} · ${valueOrEmpty(agent.status)} · ${valueOrEmpty(agent.cwd)}`;
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => {
     const scrollPosition = captureScrollPosition();
-    const nextExpandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
-    state.officeDetailFocusPending = nextExpandedAgentId !== null;
-    state.expandedAgentId = nextExpandedAgentId;
+    const previousOfficeDetailAgentId = state.officeDetailAgentId;
+    const nextOfficeDetailAgentId = state.officeDetailAgentId === agent.id ? null : agent.id;
+    state.officeDetailFocusPending = nextOfficeDetailAgentId !== null;
+    state.officeDetailAgentId = nextOfficeDetailAgentId;
     renderActiveView();
     restoreScrollPosition(scrollPosition);
+    if (nextOfficeDetailAgentId === null) {
+      focusOfficeAgent(previousOfficeDetailAgentId);
+    }
   });
 
   const bubble = document.createElement("span");
@@ -498,8 +506,10 @@ function officeAgentStatusGlyph(status) {
 }
 
 function renderOfficeDetail(visibleAgents) {
-  const selected = visibleAgents.find((agent) => agent.id === state.expandedAgentId);
+  const selected = visibleAgents.find((agent) => agent.id === state.officeDetailAgentId);
   if (!selected) {
+    state.officeDetailAgentId = null;
+    state.officeDetailFocusPending = false;
     elements.officeDetail.hidden = true;
     elements.officeDetail.setAttribute("aria-hidden", "true");
     elements.officeDetail.replaceChildren();
@@ -521,6 +531,7 @@ function renderOfficeDetail(visibleAgents) {
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
   dialog.setAttribute("aria-labelledby", "office-detail-title");
+  dialog.addEventListener("keydown", handleOfficeDetailDialogKeydown);
 
   const header = document.createElement("div");
   header.className = "office-detail__header";
@@ -572,10 +583,12 @@ function closeOfficeDetail() {
   }
 
   const scrollPosition = captureScrollPosition();
-  state.expandedAgentId = null;
+  const closingAgentId = state.officeDetailAgentId;
+  state.officeDetailAgentId = null;
   state.officeDetailFocusPending = false;
   renderActiveView();
   restoreScrollPosition(scrollPosition);
+  focusOfficeAgent(closingAgentId);
 }
 
 function handleOfficeDetailKeydown(event) {
@@ -585,6 +598,50 @@ function handleOfficeDetailKeydown(event) {
 
   event.preventDefault();
   closeOfficeDetail();
+}
+
+function handleOfficeDetailDialogKeydown(event) {
+  if (event.key !== "Tab") {
+    return;
+  }
+
+  const dialog = event.currentTarget;
+  if (!(dialog instanceof HTMLElement)) {
+    return;
+  }
+
+  const focusableElements = Array.from(
+    dialog.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => element instanceof HTMLElement && !element.hidden);
+  if (focusableElements.length === 0) {
+    event.preventDefault();
+    return;
+  }
+
+  const firstFocusable = focusableElements[0];
+  const lastFocusable = focusableElements[focusableElements.length - 1];
+  if (event.shiftKey && document.activeElement === firstFocusable) {
+    event.preventDefault();
+    lastFocusable.focus();
+  } else if (!event.shiftKey && document.activeElement === lastFocusable) {
+    event.preventDefault();
+    firstFocusable.focus();
+  }
+}
+
+function focusOfficeAgent(agentId) {
+  if (!agentId) {
+    return;
+  }
+
+  const agentButton = Array.from(elements.officeBody.querySelectorAll(".office-agent")).find(
+    (button) => button.dataset.agentId === agentId,
+  );
+  if (agentButton) {
+    agentButton.focus({ preventScroll: true });
+  }
 }
 
 function renderOfficeAlerts() {

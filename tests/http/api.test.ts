@@ -487,17 +487,22 @@ test("GET /ui assets open office agent details in a modal dialog", async () => {
 
     assert.match(
       script,
-      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?const nextExpandedAgentId = state\.expandedAgentId === agent\.id \? null : agent\.id;[\s\S]*?state\.officeDetailFocusPending = nextExpandedAgentId !== null;[\s\S]*?state\.expandedAgentId = nextExpandedAgentId;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
+      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?const previousOfficeDetailAgentId = state\.officeDetailAgentId;[\s\S]*?const nextOfficeDetailAgentId = state\.officeDetailAgentId === agent\.id \? null : agent\.id;[\s\S]*?state\.officeDetailFocusPending = nextOfficeDetailAgentId !== null;[\s\S]*?state\.officeDetailAgentId = nextOfficeDetailAgentId;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
     );
+    assert.match(script, /officeDetailAgentId:\s*null/);
     assert.match(script, /officeDetailFocusPending:\s*false/);
     assert.match(script, /document\.addEventListener\("keydown", handleOfficeDetailKeydown\);/);
     assert.match(script, /function closeOfficeDetail\(\)/);
     assert.match(script, /function handleOfficeDetailKeydown\(event\)/);
+    assert.match(script, /function handleOfficeDetailDialogKeydown\(event\)/);
+    assert.match(script, /function focusOfficeAgent\(agentId\)/);
     assert.match(script, /event\.key !== "Escape"/);
+    assert.match(script, /event\.key !== "Tab"/);
     assert.match(script, /office-detail__backdrop/);
     assert.match(script, /setAttribute\("role", "dialog"\)/);
     assert.match(script, /setAttribute\("aria-modal", "true"\)/);
     assert.match(script, /setAttribute\("aria-labelledby", "office-detail-title"\)/);
+    assert.match(script, /dialog\.addEventListener\("keydown", handleOfficeDetailDialogKeydown\);/);
     assert.match(script, /office-detail__close/);
 
     assert.match(styles, /\.office-detail \{[\s\S]*?position: fixed;/);
