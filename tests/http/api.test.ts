@@ -357,6 +357,8 @@ test("GET /ui/agent.html serves the agent session page", async () => {
 
     assert.match(html, /<title>AgentBoard Session<\/title>/);
     assert.match(html, /id="session-title"/);
+    assert.match(html, /id="session-summary"/);
+    assert.match(html, /id="session-diagnostics"/);
     assert.match(html, /id="session-messages"/);
     assert.match(html, /<script type="module" src="\/ui\/agent\.js"><\/script>/);
   });
@@ -385,6 +387,11 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(session, /parseCodexSession/);
     assert.match(session, /\/agents\/\$\{encodeURIComponent\(agentId\)\}\/session/);
     assert.match(session, /euphony-conversation/);
+    assert.match(session, /renderSessionSummary/);
+    assert.match(session, /renderDiagnostics/);
+    assert.match(session, /Context tokens/);
+    assert.match(session, /Total tokens/);
+    assert.match(session, /unknown/);
     assert.match(styles, /\.session-panel/);
     assert.match(styles, /\.agent-message-link/);
   });

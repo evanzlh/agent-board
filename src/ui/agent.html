@@ -19,6 +19,14 @@
 
       <section id="session-error" class="error-banner" aria-live="polite" hidden></section>
 
+      <section id="session-summary" class="session-summary" aria-label="Agent session summary" hidden>
+        <div id="session-summary-grid" class="session-summary__grid"></div>
+        <details id="session-diagnostics" class="session-diagnostics">
+          <summary>Diagnostics</summary>
+          <div id="session-diagnostics-content" class="session-diagnostics__content"></div>
+        </details>
+      </section>
+
       <section class="session-panel" aria-label="Agent session messages">
         <div id="session-state" class="empty-state">Loading session...</div>
         <div id="session-messages" class="session-messages"></div>
