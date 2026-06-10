@@ -402,6 +402,12 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(styles, /\.session-summary/);
     assert.match(styles, /\.session-summary-card/);
     assert.match(styles, /\.session-diagnostics/);
+    assert.match(
+      styles,
+      /\.session-diagnostics__section dl \{[\s\S]*?grid-template-columns: minmax\(90px, 0\.8fr\) minmax\(0, 1\.2fr\);/,
+    );
+    assert.match(styles, /\.session-diagnostics__section dt \{[\s\S]*?overflow-wrap: anywhere;/);
+    assert.match(styles, /\.session-diagnostics__section dd \{[\s\S]*?overflow-wrap: anywhere;/);
     assert.match(styles, /\.agent-message-link/);
   });
 });

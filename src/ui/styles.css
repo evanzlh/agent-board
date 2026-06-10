@@ -1698,15 +1698,17 @@ tbody tr.is-expanded {
 
 .session-diagnostics__section dl {
   display: grid;
-  grid-template-columns: minmax(112px, max-content) minmax(0, 1fr);
+  grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
   gap: 5px 10px;
   margin: 0;
 }
 
 .session-diagnostics__section dt {
+  min-width: 0;
   color: #637487;
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .session-diagnostics__section dd {
