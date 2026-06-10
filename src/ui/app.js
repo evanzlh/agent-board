@@ -28,6 +28,7 @@ const state = {
   agentStatuses: new Map(),
   officeAlerts: [],
   nextOfficeAlertId: 1,
+  officeDetailFocusPending: false,
   activeView: "table",
   autoRefreshEnabled: true,
   isLoading: false,
@@ -107,6 +108,7 @@ function wireControls() {
     state.filters.search = elements.searchFilter.value;
     renderActiveView();
   });
+  document.addEventListener("keydown", handleOfficeDetailKeydown);
 }
 
 async function loadSnapshot() {
@@ -303,6 +305,7 @@ function renderOffice() {
     empty.textContent = state.agents.length === 0 ? "No agents loaded." : "No agents match the filters.";
     elements.officeBody.replaceChildren(empty);
     elements.officeDetail.hidden = true;
+    elements.officeDetail.setAttribute("aria-hidden", "true");
     elements.officeDetail.replaceChildren();
     return;
   }
@@ -395,7 +398,9 @@ function renderOfficeAgent(agent, role) {
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => {
     const scrollPosition = captureScrollPosition();
-    state.expandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
+    const nextExpandedAgentId = state.expandedAgentId === agent.id ? null : agent.id;
+    state.officeDetailFocusPending = nextExpandedAgentId !== null;
+    state.expandedAgentId = nextExpandedAgentId;
     renderActiveView();
     restoreScrollPosition(scrollPosition);
   });
@@ -496,13 +501,42 @@ function renderOfficeDetail(visibleAgents) {
   const selected = visibleAgents.find((agent) => agent.id === state.expandedAgentId);
   if (!selected) {
     elements.officeDetail.hidden = true;
+    elements.officeDetail.setAttribute("aria-hidden", "true");
     elements.officeDetail.replaceChildren();
     return;
   }
 
   elements.officeDetail.hidden = false;
+  elements.officeDetail.setAttribute("aria-hidden", "false");
+
+  const backdrop = document.createElement("button");
+  backdrop.type = "button";
+  backdrop.className = "office-detail__backdrop";
+  backdrop.tabIndex = -1;
+  backdrop.setAttribute("aria-label", "Close agent detail");
+  backdrop.addEventListener("click", closeOfficeDetail);
+
+  const dialog = document.createElement("section");
+  dialog.className = "office-detail__dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "office-detail-title");
+
+  const header = document.createElement("div");
+  header.className = "office-detail__header";
+
   const title = document.createElement("h2");
+  title.id = "office-detail-title";
   title.textContent = valueOrEmpty(selected.displayName);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "office-detail__close";
+  closeButton.textContent = "Close";
+  closeButton.setAttribute("aria-label", `Close ${valueOrEmpty(selected.displayName)} detail`);
+  closeButton.addEventListener("click", closeOfficeDetail);
+
+  header.append(title, closeButton);
 
   const meta = document.createElement("dl");
   meta.className = "office-detail__meta";
@@ -519,7 +553,38 @@ function renderOfficeDetail(visibleAgents) {
   actions.className = "detail-actions";
   actions.append(renderAgentMessageLink(selected));
 
-  elements.officeDetail.replaceChildren(title, meta, actions);
+  const body = document.createElement("div");
+  body.className = "office-detail__body";
+  body.append(meta, actions);
+
+  dialog.append(header, body);
+  elements.officeDetail.replaceChildren(backdrop, dialog);
+
+  if (state.officeDetailFocusPending) {
+    state.officeDetailFocusPending = false;
+    closeButton.focus({ preventScroll: true });
+  }
+}
+
+function closeOfficeDetail() {
+  if (state.activeView !== "office" || elements.officeDetail.hidden) {
+    return;
+  }
+
+  const scrollPosition = captureScrollPosition();
+  state.expandedAgentId = null;
+  state.officeDetailFocusPending = false;
+  renderActiveView();
+  restoreScrollPosition(scrollPosition);
+}
+
+function handleOfficeDetailKeydown(event) {
+  if (event.key !== "Escape" || state.activeView !== "office" || elements.officeDetail.hidden) {
+    return;
+  }
+
+  event.preventDefault();
+  closeOfficeDetail();
 }
 
 function renderOfficeAlerts() {
