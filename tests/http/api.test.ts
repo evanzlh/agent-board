@@ -477,14 +477,35 @@ test("GET /ui assets render detailed office workers with graphic status signals"
   });
 });
 
-test("GET /ui assets preserve scroll when selecting office agents", async () => {
+test("GET /ui assets open office agent details in a modal dialog", async () => {
   await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/ui`)).text();
     const script = await (await fetch(`${baseUrl}/ui/app.js`)).text();
+    const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
+
+    assert.match(html, /id="office-detail" class="office-detail" hidden aria-hidden="true"/);
 
     assert.match(
       script,
-      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?state\.expandedAgentId = state\.expandedAgentId === agent\.id \? null : agent\.id;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
+      /const scrollPosition = captureScrollPosition\(\);[\s\S]*?const nextExpandedAgentId = state\.expandedAgentId === agent\.id \? null : agent\.id;[\s\S]*?state\.officeDetailFocusPending = nextExpandedAgentId !== null;[\s\S]*?state\.expandedAgentId = nextExpandedAgentId;[\s\S]*?renderActiveView\(\);[\s\S]*?restoreScrollPosition\(scrollPosition\);/,
     );
+    assert.match(script, /officeDetailFocusPending:\s*false/);
+    assert.match(script, /document\.addEventListener\("keydown", handleOfficeDetailKeydown\);/);
+    assert.match(script, /function closeOfficeDetail\(\)/);
+    assert.match(script, /function handleOfficeDetailKeydown\(event\)/);
+    assert.match(script, /event\.key !== "Escape"/);
+    assert.match(script, /office-detail__backdrop/);
+    assert.match(script, /setAttribute\("role", "dialog"\)/);
+    assert.match(script, /setAttribute\("aria-modal", "true"\)/);
+    assert.match(script, /setAttribute\("aria-labelledby", "office-detail-title"\)/);
+    assert.match(script, /office-detail__close/);
+
+    assert.match(styles, /\.office-detail \{[\s\S]*?position: fixed;/);
+    assert.match(styles, /\.office-detail\[hidden\] \{[\s\S]*?display: none;/);
+    assert.match(styles, /\.office-detail__backdrop/);
+    assert.match(styles, /\.office-detail__dialog/);
+    assert.match(styles, /\.office-detail__header/);
+    assert.match(styles, /\.office-detail__close/);
   });
 });
 
