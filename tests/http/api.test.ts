@@ -498,6 +498,8 @@ test("GET /ui assets open office agent details in a modal dialog", async () => {
     assert.match(script, /function focusOfficeAgent\(agentId\)/);
     assert.match(script, /event\.key !== "Escape"/);
     assert.match(script, /event\.key !== "Tab"/);
+    assert.match(script, /elements\.officeDetail\.contains\(document\.activeElement\)/);
+    assert.match(script, /actions\.querySelector\("\.agent-message-link"\)/);
     assert.match(script, /office-detail__backdrop/);
     assert.match(script, /setAttribute\("role", "dialog"\)/);
     assert.match(script, /setAttribute\("aria-modal", "true"\)/);

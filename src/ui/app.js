@@ -516,6 +516,9 @@ function renderOfficeDetail(visibleAgents) {
     return;
   }
 
+  const hadFocusInDetail = elements.officeDetail.contains(document.activeElement);
+  const restoreMessageLinkFocus =
+    hadFocusInDetail && document.activeElement?.classList?.contains("agent-message-link");
   elements.officeDetail.hidden = false;
   elements.officeDetail.setAttribute("aria-hidden", "false");
 
@@ -574,6 +577,9 @@ function renderOfficeDetail(visibleAgents) {
   if (state.officeDetailFocusPending) {
     state.officeDetailFocusPending = false;
     closeButton.focus({ preventScroll: true });
+  } else if (hadFocusInDetail) {
+    const focusTarget = restoreMessageLinkFocus ? actions.querySelector(".agent-message-link") : closeButton;
+    focusTarget?.focus({ preventScroll: true });
   }
 }
 
