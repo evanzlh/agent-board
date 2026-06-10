@@ -55,6 +55,30 @@ type SessionEvent = {
 };
 
 const KNOWN_ROLES = ["user", "assistant", "developer", "system", "tool"] as const;
+const TOP_LEVEL_EVENT_TYPES = new Set([
+  "session_meta",
+  "response_item",
+  "event_msg",
+  "turn_context",
+  "compacted",
+]);
+const RESPONSE_ITEM_TYPES = new Set([
+  "message",
+  "reasoning",
+  "function_call",
+  "function_call_output",
+  "custom_tool_call",
+  "custom_tool_call_output",
+  "tool_search_call",
+  "tool_search_output",
+  "web_search_call",
+]);
+const EVENT_MESSAGE_TYPES = new Set([
+  "agent_reasoning",
+  "context_compacted",
+  "token_count",
+  "turn_aborted",
+]);
 const TOOL_CALL_TYPES = new Set([
   "function_call",
   "custom_tool_call",
@@ -89,7 +113,7 @@ export function summarizeSessionEvents(rawEvents: unknown[]): SessionSummary {
   let turnContext: Record<string, unknown> | null = null;
 
   for (const event of events) {
-    const eventType = stringOr(event.type, "unknown");
+    const eventType = knownTypeOrUnknown(event.type, TOP_LEVEL_EVENT_TYPES);
     increment(byType, eventType);
 
     const payload = isRecord(event.payload) ? event.payload : {};
@@ -102,7 +126,7 @@ export function summarizeSessionEvents(rawEvents: unknown[]): SessionSummary {
     }
 
     if (eventType === "response_item") {
-      const payloadType = stringOr(payload.type, "unknown");
+      const payloadType = knownTypeOrUnknown(payload.type, RESPONSE_ITEM_TYPES);
       increment(responseItems, payloadType);
 
       if (payloadType === "message") {
@@ -123,7 +147,7 @@ export function summarizeSessionEvents(rawEvents: unknown[]): SessionSummary {
     }
 
     if (eventType === "event_msg") {
-      const payloadType = stringOr(payload.type, "unknown");
+      const payloadType = knownTypeOrUnknown(payload.type, EVENT_MESSAGE_TYPES);
       increment(eventMessages, payloadType);
 
       if (payloadType === "agent_reasoning") {
@@ -286,8 +310,11 @@ function numberOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function stringOr(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
+function knownTypeOrUnknown(value: unknown, knownTypes: Set<string>): string {
+  if (typeof value !== "string" || value.length === 0) {
+    return "unknown";
+  }
+  return knownTypes.has(value) ? value : "unknown";
 }
 
 function stringOrNull(value: unknown): string | null {

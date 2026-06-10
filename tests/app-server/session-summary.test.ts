@@ -144,6 +144,11 @@ test("summarizeSessionEvents counts messages, tools, reasoning, tokens, compacti
     },
     {
       timestamp: "2026-06-10T01:00:16.000Z",
+      type: "event_msg",
+      payload: { type: "arbitrary_event_message" },
+    },
+    {
+      timestamp: "2026-06-10T01:00:17.000Z",
       type: "unknown_top",
       payload: {},
     },
@@ -151,13 +156,13 @@ test("summarizeSessionEvents counts messages, tools, reasoning, tokens, compacti
 
   const summary = summarizeSessionEvents(events);
 
-  assert.equal(summary.events.total, 17);
+  assert.equal(summary.events.total, 18);
   assert.equal(summary.events.byType.session_meta, 1);
   assert.equal(summary.events.byType.response_item, 10);
-  assert.equal(summary.events.byType.event_msg, 3);
+  assert.equal(summary.events.byType.event_msg, 4);
   assert.equal(summary.events.byType.turn_context, 1);
   assert.equal(summary.events.byType.compacted, 1);
-  assert.equal(summary.events.byType.unknown_top, 1);
+  assert.equal(summary.events.byType.unknown, 1);
   assert.equal(summary.events.responseItems.message, 3);
   assert.equal(summary.events.responseItems.reasoning, 1);
   assert.equal(summary.events.responseItems.function_call, 1);
@@ -165,10 +170,11 @@ test("summarizeSessionEvents counts messages, tools, reasoning, tokens, compacti
   assert.equal(summary.events.responseItems.custom_tool_call, 1);
   assert.equal(summary.events.responseItems.custom_tool_call_output, 1);
   assert.equal(summary.events.responseItems.web_search_call, 1);
-  assert.equal(summary.events.responseItems.unknown_payload, 1);
+  assert.equal(summary.events.responseItems.unknown, 1);
   assert.equal(summary.events.eventMessages.token_count, 1);
   assert.equal(summary.events.eventMessages.context_compacted, 1);
   assert.equal(summary.events.eventMessages.turn_aborted, 1);
+  assert.equal(summary.events.eventMessages.unknown, 1);
   assert.equal(summary.events.compactions, 2);
   assert.equal(summary.events.turnAborts, 1);
 
@@ -254,4 +260,19 @@ test("summarizeSessionEvents ignores non-object session entries", () => {
 
   assert.equal(summary.events.total, 1);
   assert.equal(summary.messages.roles.assistant, 1);
+});
+
+test("summarizeSessionEvents does not expose arbitrary unknown type strings as count keys", () => {
+  const summary = summarizeSessionEvents([
+    { type: "not_a_public_event_key", payload: {} },
+    { type: "response_item", payload: { type: "not_a_public_response_key" } },
+    { type: "event_msg", payload: { type: "not_a_public_event_message_key" } },
+  ]);
+
+  assert.equal(summary.events.byType.unknown, 1);
+  assert.equal(summary.events.responseItems.unknown, 1);
+  assert.equal(summary.events.eventMessages.unknown, 1);
+  assert.equal("not_a_public_event_key" in summary.events.byType, false);
+  assert.equal("not_a_public_response_key" in summary.events.responseItems, false);
+  assert.equal("not_a_public_event_message_key" in summary.events.eventMessages, false);
 });
