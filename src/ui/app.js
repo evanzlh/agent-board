@@ -527,7 +527,7 @@ function renderOfficeDetail(visibleAgents) {
   backdrop.className = "office-detail__backdrop";
   backdrop.tabIndex = -1;
   backdrop.setAttribute("aria-label", "Close agent detail");
-  backdrop.addEventListener("click", closeOfficeDetail);
+  backdrop.addEventListener("click", handleOfficeDetailBackdropClick);
 
   const dialog = document.createElement("section");
   dialog.className = "office-detail__dialog";
@@ -595,6 +595,27 @@ function closeOfficeDetail() {
   renderActiveView();
   restoreScrollPosition(scrollPosition);
   focusOfficeAgent(closingAgentId);
+}
+
+function handleOfficeDetailBackdropClick(event) {
+  const clickedAgentId = officeAgentIdAtPoint(event.clientX, event.clientY);
+  if (clickedAgentId === state.officeDetailAgentId) {
+    closeOfficeDetail();
+    return;
+  }
+
+  closeOfficeDetail();
+}
+
+function officeAgentIdAtPoint(clientX, clientY) {
+  const previousPointerEvents = elements.officeDetail.style.pointerEvents;
+  elements.officeDetail.style.pointerEvents = "none";
+  try {
+    const element = document.elementFromPoint(clientX, clientY);
+    return element?.closest?.(".office-agent")?.dataset?.agentId ?? null;
+  } finally {
+    elements.officeDetail.style.pointerEvents = previousPointerEvents;
+  }
 }
 
 function handleOfficeDetailKeydown(event) {

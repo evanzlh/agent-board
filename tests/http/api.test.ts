@@ -493,6 +493,8 @@ test("GET /ui assets open office agent details in a modal dialog", async () => {
     assert.match(script, /officeDetailFocusPending:\s*false/);
     assert.match(script, /document\.addEventListener\("keydown", handleOfficeDetailKeydown\);/);
     assert.match(script, /function closeOfficeDetail\(\)/);
+    assert.match(script, /function handleOfficeDetailBackdropClick\(event\)/);
+    assert.match(script, /function officeAgentIdAtPoint\(clientX, clientY\)/);
     assert.match(script, /function handleOfficeDetailKeydown\(event\)/);
     assert.match(script, /function handleOfficeDetailDialogKeydown\(event\)/);
     assert.match(script, /function focusOfficeAgent\(agentId\)/);
@@ -500,6 +502,8 @@ test("GET /ui assets open office agent details in a modal dialog", async () => {
     assert.match(script, /event\.key !== "Tab"/);
     assert.match(script, /elements\.officeDetail\.contains\(document\.activeElement\)/);
     assert.match(script, /actions\.querySelector\("\.agent-message-link"\)/);
+    assert.match(script, /backdrop\.addEventListener\("click", handleOfficeDetailBackdropClick\);/);
+    assert.match(script, /document\.elementFromPoint\(clientX, clientY\)/);
     assert.match(script, /office-detail__backdrop/);
     assert.match(script, /setAttribute\("role", "dialog"\)/);
     assert.match(script, /setAttribute\("aria-modal", "true"\)/);
