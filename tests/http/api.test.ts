@@ -166,6 +166,11 @@ test("GET /agents/:id/session returns agent metadata and Codex session events", 
       const body = await response.json();
       assert.equal(body.agent.id, "work-1");
       assert.deepEqual(body.events, sessionEvents);
+      assert.equal(body.summary.events.total, 2);
+      assert.equal(body.summary.events.byType.session_meta, 1);
+      assert.equal(body.summary.events.byType.response_item, 1);
+      assert.equal(body.summary.messages.roles.user, 1);
+      assert.equal(body.summary.tokens.last, null);
     },
     {
       sessionReader: {

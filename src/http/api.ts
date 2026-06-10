@@ -3,6 +3,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { summarizeSessionEvents } from "../app-server/session-summary.ts";
 import type { AgentFilters, StatusStore, StoreEvent } from "../store/status-store.ts";
 import type { AgentStatus } from "../domain/types.ts";
 
@@ -166,7 +167,7 @@ async function handleRequest(
         sendJson(response, 404, { error: "session_not_found", id: sessionAgentId });
         return;
       }
-      sendJson(response, 200, { agent, events });
+      sendJson(response, 200, { agent, events, summary: summarizeSessionEvents(events) });
     } catch {
       sendJson(response, 500, {
         error: "session_unavailable",

@@ -220,6 +220,8 @@ test("startDaemon exposes current client session events through the HTTP API", a
     const body = await response.json();
     assert.equal(body.agent.id, "one");
     assert.deepEqual(body.events, client.sessionEvents);
+    assert.equal(body.summary.events.total, 2);
+    assert.equal(body.summary.messages.roles.user, 1);
   } finally {
     await daemon.stop();
   }
