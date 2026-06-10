@@ -379,16 +379,23 @@ test("GET /ui vendor euphony assets are served from an explicit safe prefix", as
 
 test("GET /ui assets wire dashboard message links and euphony session rendering", async () => {
   await withServer(async (baseUrl) => {
+    const html = await (await fetch(`${baseUrl}/ui/agent.html`)).text();
     const dashboard = await (await fetch(`${baseUrl}/ui/app.js`)).text();
     const session = await (await fetch(`${baseUrl}/ui/agent.js`)).text();
     const sessionSummary = await (await fetch(`${baseUrl}/ui/session-summary.js`)).text();
     const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
 
+    assert.match(html, /id="session-message-controls"/);
     assert.match(dashboard, /View messages/);
     assert.match(dashboard, /\/ui\/agent\.html\?id=/);
     assert.match(session, /parseCodexSession/);
     assert.match(session, /\/agents\/\$\{encodeURIComponent\(agentId\)\}\/session/);
     assert.match(session, /euphony-conversation/);
+    assert.match(session, /SESSION_MESSAGE_PAGE_SIZE/);
+    assert.match(session, /renderConversationPage\(\)/);
+    assert.match(session, /messages\.slice\(pageStart, pageEnd\)/);
+    assert.match(session, /sessionMessagePageStart = Math\.max\(0, messages\.length - SESSION_MESSAGE_PAGE_SIZE\)/);
+    assert.match(session, /renderMessageControls\(messages\.length, pageStart, pageEnd\)/);
     assert.match(session, /\/ui\/session-summary\.js/);
     assert.match(sessionSummary, /renderSessionSummary/);
     assert.match(sessionSummary, /renderDiagnostics/);
@@ -408,6 +415,7 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     );
     assert.match(styles, /\.session-diagnostics__section dt \{[\s\S]*?overflow-wrap: anywhere;/);
     assert.match(styles, /\.session-diagnostics__section dd \{[\s\S]*?overflow-wrap: anywhere;/);
+    assert.match(styles, /\.session-message-controls/);
     assert.match(styles, /\.agent-message-link/);
   });
 });
