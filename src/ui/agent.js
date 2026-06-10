@@ -107,7 +107,7 @@ function diagnosticsSection(title, rows) {
   const heading = document.createElement("h2");
   heading.textContent = title;
   const list = document.createElement("dl");
-  for (const [label, value] of rows.filter(([, value]) => value !== null && value !== undefined)) {
+  for (const [label, value] of rows) {
     const term = document.createElement("dt");
     term.textContent = label;
     const description = document.createElement("dd");

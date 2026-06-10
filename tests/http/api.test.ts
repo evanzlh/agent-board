@@ -392,6 +392,8 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(session, /Context tokens/);
     assert.match(session, /Total tokens/);
     assert.match(session, /unknown/);
+    assert.match(session, /formatDiagnosticValue/);
+    assert.doesNotMatch(session, /value !== null && value !== undefined/);
     assert.match(styles, /\.session-panel/);
     assert.match(styles, /\.agent-message-link/);
   });
