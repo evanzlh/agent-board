@@ -2,28 +2,29 @@
 
 ## Goal
 
-Rewrite the project README as a Chinese, GitHub-friendly open source document and add a project icon that appears in the README header.
+Rewrite the default project README as an English, GitHub-friendly open source document, add a linked Chinese README, and add a project icon that appears in both README headers.
 
-The README should make `agentBoard` feel like a clear, useful local tool for monitoring Codex agents, while keeping the technical details accurate enough for developers to run, inspect, and integrate the project.
+The README set should make `agentBoard` feel like a clear, useful local tool for monitoring Codex agents, while keeping the technical details accurate enough for developers to run, inspect, and integrate the project in either English or Chinese.
 
 ## Confirmed Direction
 
-- Product name in the README: `agentBoard`
+- Product name in the README files: `agentBoard`
 - Package and command references remain factual: `codex-status`, `npm start`, `node src/cli.ts daemon`
-- Language: Chinese primary documentation
+- Language: English default documentation in `README.md`; Chinese documentation in `README.zh-CN.md`
 - Style: "爆款工具型"
 - Tone: concise, developer-focused, high-signal, not overly decorative
 - Icon: high-contrast local AI agent status board, deep background with cyan/green status indicators
 
 ## README Structure
 
-1. Header
+1. Header in both README files
    - Centered icon image
    - `agentBoard` title
-   - Short Chinese slogan
+   - Short localized slogan
    - GitHub-style badges for Node version, local-only/read-only positioning, Codex App Server, and tests
+   - Language switcher linking `README.md` and `README.zh-CN.md`
 
-2. Value Proposition
+2. Value Proposition in both languages
    - Explain that `agentBoard` turns local Codex App Server state into a readable, read-only status dashboard and JSON/SSE API
    - Emphasize that it observes local state only and does not approve requests, send input, stop agents, or mutate sessions
 
@@ -58,7 +59,7 @@ The README should make `agentBoard` feel like a clear, useful local tool for mon
 
 ## Icon Requirements
 
-Create one workspace-bound raster icon for the README, stored under a project asset path such as `docs/assets/agentboard-icon.png`.
+Create one workspace-bound raster icon for the README files, stored under a project asset path such as `docs/assets/agentboard-icon.png`.
 
 The icon should:
 
@@ -71,7 +72,7 @@ The icon should:
 
 ## Constraints
 
-- Keep README concise enough to scan, but do not remove important operational details.
+- Keep both README files concise enough to scan, but do not remove important operational details.
 - Do not add License, Contributing, or Changelog sections.
 - Use GitHub Flavored Markdown.
 - Use GitHub admonition syntax where it improves clarity.
@@ -80,7 +81,8 @@ The icon should:
 
 ## Verification
 
-- Confirm the icon file exists and is referenced by README.
+- Confirm the icon file exists and is referenced by both README files.
+- Confirm both README files link to each other.
 - Confirm README links and commands match current project files.
 - Run the existing test suite if feasible to ensure no incidental project breakage.
-- Review `git diff` for scope: README, icon asset, and this design doc only unless implementation planning chooses otherwise.
+- Review `git diff` for scope: English README, Chinese README, icon asset, plan doc, and this design doc only unless implementation planning chooses otherwise.
