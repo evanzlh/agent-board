@@ -334,6 +334,7 @@ test("GET /ui static assets use explicit content types", async () => {
     const scripts = [
       { path: "/ui/app.js", contentType: "text/javascript; charset=utf-8" },
       { path: "/ui/agent.js", contentType: "text/javascript; charset=utf-8" },
+      { path: "/ui/session-summary.js", contentType: "text/javascript; charset=utf-8" },
       { path: "/ui/view-model.js", contentType: "text/javascript; charset=utf-8" },
       { path: "/ui/styles.css", contentType: "text/css; charset=utf-8" },
     ];
@@ -380,6 +381,7 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
   await withServer(async (baseUrl) => {
     const dashboard = await (await fetch(`${baseUrl}/ui/app.js`)).text();
     const session = await (await fetch(`${baseUrl}/ui/agent.js`)).text();
+    const sessionSummary = await (await fetch(`${baseUrl}/ui/session-summary.js`)).text();
     const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
 
     assert.match(dashboard, /View messages/);
@@ -387,13 +389,15 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     assert.match(session, /parseCodexSession/);
     assert.match(session, /\/agents\/\$\{encodeURIComponent\(agentId\)\}\/session/);
     assert.match(session, /euphony-conversation/);
-    assert.match(session, /renderSessionSummary/);
-    assert.match(session, /renderDiagnostics/);
-    assert.match(session, /Context tokens/);
-    assert.match(session, /Total tokens/);
-    assert.match(session, /unknown/);
-    assert.match(session, /formatDiagnosticValue/);
-    assert.doesNotMatch(session, /value !== null && value !== undefined/);
+    assert.match(session, /\/ui\/session-summary\.js/);
+    assert.match(sessionSummary, /renderSessionSummary/);
+    assert.match(sessionSummary, /renderDiagnostics/);
+    assert.match(sessionSummary, /Context tokens/);
+    assert.match(sessionSummary, /Total tokens/);
+    assert.match(sessionSummary, /unknown/);
+    assert.match(sessionSummary, /formatDiagnosticValue/);
+    assert.match(sessionSummary, /normalizeToolRows/);
+    assert.doesNotMatch(sessionSummary, /value !== null && value !== undefined/);
     assert.match(styles, /\.session-panel/);
     assert.match(styles, /\.agent-message-link/);
   });

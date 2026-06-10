@@ -34,6 +34,7 @@ const UI_INDEX_PATH = fileURLToPath(new URL("../ui/index.html", import.meta.url)
 const UI_AGENT_INDEX_PATH = fileURLToPath(new URL("../ui/agent.html", import.meta.url));
 const UI_APP_PATH = fileURLToPath(new URL("../ui/app.js", import.meta.url));
 const UI_AGENT_APP_PATH = fileURLToPath(new URL("../ui/agent.js", import.meta.url));
+const UI_SESSION_SUMMARY_PATH = fileURLToPath(new URL("../ui/session-summary.js", import.meta.url));
 const UI_VIEW_MODEL_PATH = fileURLToPath(new URL("../ui/view-model.js", import.meta.url));
 const UI_STYLES_PATH = fileURLToPath(new URL("../ui/styles.css", import.meta.url));
 const EUPHONY_ASSET_PREFIX = "/ui/vendor/euphony/";
@@ -45,6 +46,10 @@ const UI_ASSETS = new Map<string, UiAsset>([
   ["/ui/agent.html", { path: UI_AGENT_INDEX_PATH, contentType: "text/html; charset=utf-8" }],
   ["/ui/app.js", { path: UI_APP_PATH, contentType: "text/javascript; charset=utf-8" }],
   ["/ui/agent.js", { path: UI_AGENT_APP_PATH, contentType: "text/javascript; charset=utf-8" }],
+  [
+    "/ui/session-summary.js",
+    { path: UI_SESSION_SUMMARY_PATH, contentType: "text/javascript; charset=utf-8" },
+  ],
   [
     "/ui/view-model.js",
     { path: UI_VIEW_MODEL_PATH, contentType: "text/javascript; charset=utf-8" },
