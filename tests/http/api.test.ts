@@ -385,7 +385,10 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     const sessionSummary = await (await fetch(`${baseUrl}/ui/session-summary.js`)).text();
     const styles = await (await fetch(`${baseUrl}/ui/styles.css`)).text();
 
-    assert.match(html, /id="session-message-controls"/);
+    assert.match(
+      html,
+      /<nav id="session-message-controls" class="session-message-controls" aria-label="Session message pages" hidden><\/nav>[\s\S]*?<section id="session-summary"/,
+    );
     assert.match(dashboard, /View messages/);
     assert.match(dashboard, /\/ui\/agent\.html\?id=/);
     assert.match(session, /parseCodexSession/);
@@ -415,7 +418,11 @@ test("GET /ui assets wire dashboard message links and euphony session rendering"
     );
     assert.match(styles, /\.session-diagnostics__section dt \{[\s\S]*?overflow-wrap: anywhere;/);
     assert.match(styles, /\.session-diagnostics__section dd \{[\s\S]*?overflow-wrap: anywhere;/);
-    assert.match(styles, /\.session-message-controls/);
+    assert.match(styles, /\.session-panel \{[\s\S]*?overflow: hidden;/);
+    assert.match(
+      styles,
+      /\.session-message-controls \{[\s\S]*?position: sticky;[\s\S]*?top: 0;[\s\S]*?z-index: \d+;[\s\S]*?margin-top: 12px;[\s\S]*?border: 1px solid #cfd8e3;/,
+    );
     assert.match(styles, /\.agent-message-link/);
   });
 });

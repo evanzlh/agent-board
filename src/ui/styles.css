@@ -1790,12 +1790,18 @@ tbody tr.is-expanded {
 }
 
 .session-message-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
   justify-content: space-between;
-  border-bottom: 1px solid #dbe2ea;
+  margin-top: 12px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
   background: #f7fafc;
+  box-shadow: 0 2px 8px rgba(51, 65, 85, 0.08);
   padding: 10px 12px;
 }
 
